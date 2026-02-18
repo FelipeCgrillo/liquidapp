@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import StepGeolocation from '@/components/claim/StepGeolocation';
 import StepEvidence from '@/components/claim/StepEvidence';
 import StepVoice from '@/components/claim/StepVoice';
 import StepConfirmation from '@/components/claim/StepConfirmation';
+import { ClaimProvider, useClaim } from '@/context/ClaimContext';
+import { Loader2 } from 'lucide-react';
 
 const STEPS = [
     { id: 'geo', component: StepGeolocation },
@@ -14,38 +16,56 @@ const STEPS = [
     { id: 'confirm', component: StepConfirmation },
 ];
 
-export default function ClaimWizardPage() {
-    const [currentStepIndex, setCurrentStepIndex] = useState(0);
+function WizardContent() {
+    const { pasoActual, setPasoActual, siniestroId, crearSiniestro, isLoading } = useClaim();
     const [direction, setDirection] = useState(1);
 
+    // Inicializar siniestro al cargar
+    useEffect(() => {
+        if (!siniestroId && !isLoading) {
+            crearSiniestro();
+        }
+    }, [siniestroId, isLoading, crearSiniestro]);
+
     const nextStep = () => {
-        if (currentStepIndex < STEPS.length - 1) {
+        if (pasoActual < STEPS.length - 1) {
             setDirection(1);
-            setCurrentStepIndex(prev => prev + 1);
+            setPasoActual(prev => prev + 1);
         }
     };
 
     const prevStep = () => {
-        if (currentStepIndex > 0) {
+        if (pasoActual > 0) {
             setDirection(-1);
-            setCurrentStepIndex(prev => prev - 1);
+            setPasoActual(prev => prev - 1);
         }
     };
 
-    const CurrentComponent = STEPS[currentStepIndex].component;
+    const CurrentComponent = STEPS[pasoActual].component;
+
+    if (!siniestroId && isLoading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center space-y-3">
+                    <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto" />
+                    <p className="text-gray-500">Iniciando asistente...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
             {/* Minimal Header */}
             <header className="px-6 py-4 bg-white border-b border-gray-100 flex justify-between items-center sticky top-0 z-50">
                 <span className="text-sm font-bold text-gray-400">
-                    Siniestro #TEMP-{Math.floor(Math.random() * 1000)}
+                    Siniestro #{siniestroId ? siniestroId.slice(0, 8).toUpperCase() : '...'}
                 </span>
                 <div className="flex gap-1">
                     {STEPS.map((_, index) => (
                         <div
                             key={index}
-                            className={`h-2 rounded-full transition-all duration-300 ${index === currentStepIndex ? 'w-8 bg-blue-600' : 'w-2 bg-gray-200'}`}
+                            className={`h-2 rounded-full transition-all duration-300 ${index === pasoActual ? 'w-8 bg-blue-600' : 'w-2 bg-gray-200'}`}
                         />
                     ))}
                 </div>
@@ -55,7 +75,7 @@ export default function ClaimWizardPage() {
             <main className="flex-grow flex flex-col p-4 max-w-lg mx-auto w-full relative overflow-hidden">
                 <AnimatePresence mode="wait" custom={direction}>
                     <motion.div
-                        key={currentStepIndex}
+                        key={pasoActual}
                         custom={direction}
                         initial={{ x: direction * 50, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
@@ -68,5 +88,13 @@ export default function ClaimWizardPage() {
                 </AnimatePresence>
             </main>
         </div>
+    );
+}
+
+export default function ClaimWizardPage() {
+    return (
+        <ClaimProvider>
+            <WizardContent />
+        </ClaimProvider>
     );
 }

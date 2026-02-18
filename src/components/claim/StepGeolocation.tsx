@@ -2,16 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin, Navigation, AlertTriangle } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { MapPin, Navigation, AlertTriangle, Loader2 } from 'lucide-react';
+import { useClaim } from '@/context/ClaimContext';
 
 interface StepGeolocationProps {
     onNext: () => void;
 }
 
 export default function StepGeolocation({ onNext }: StepGeolocationProps) {
+    const { actualizarUbicacion } = useClaim();
     const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [isOnline, setIsOnline] = useState(true);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
@@ -24,6 +27,7 @@ export default function StepGeolocation({ onNext }: StepGeolocationProps) {
             window.removeEventListener('offline', handleOffline);
         };
     }, []);
+
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
@@ -47,6 +51,15 @@ export default function StepGeolocation({ onNext }: StepGeolocationProps) {
             setLoading(false);
         }
     }, []);
+
+    const handleConfirm = async () => {
+        if (location) {
+            setSaving(true);
+            await actualizarUbicacion(location.lat, location.lng);
+            setSaving(false);
+        }
+        onNext();
+    };
 
     return (
         <div className="flex flex-col h-full space-y-6">
@@ -88,11 +101,18 @@ export default function StepGeolocation({ onNext }: StepGeolocationProps) {
             </Card>
 
             <Button
-                onClick={onNext}
+                onClick={handleConfirm}
                 className="w-full h-14 text-lg font-bold bg-blue-700 hover:bg-blue-800 shadow-lg"
-                disabled={loading}
+                disabled={loading || saving}
             >
-                Confirmar Ubicación
+                {saving ? (
+                    <>
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                        Guardando...
+                    </>
+                ) : (
+                    "Confirmar Ubicación"
+                )}
             </Button>
 
             {!isOnline && (

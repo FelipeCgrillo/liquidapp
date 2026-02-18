@@ -3,23 +3,35 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, Loader2, FileText, MapPin, Camera, Mic } from 'lucide-react';
+import { CheckCircle, Loader2, FileText, MapPin, Camera, Mic, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
+import { useClaim } from '@/context/ClaimContext';
+import { toast } from 'react-hot-toast';
 
 interface StepConfirmationProps {
     onBack: () => void;
 }
 
 export default function StepConfirmation({ onBack }: StepConfirmationProps) {
+    const {
+        siniestroId,
+        evidencias,
+        finalizarSiniestro,
+        isLoading: contextLoading
+    } = useClaim();
+
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
 
     const handleSubmit = async () => {
+        if (!siniestroId) return;
+
         setSubmitting(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        const success = await finalizarSiniestro();
+        if (success) {
+            setSubmitted(true);
+        }
         setSubmitting(false);
-        setSubmitted(true);
     };
 
     if (submitted) {
@@ -35,7 +47,9 @@ export default function StepConfirmation({ onBack }: StepConfirmationProps) {
                 <Card className="w-full bg-blue-50 border-blue-100 mt-8">
                     <CardContent className="p-4">
                         <p className="text-sm font-semibold text-blue-800">N° de Siniestro</p>
-                        <p className="text-2xl font-mono text-blue-900">LIQ-2026-8492</p>
+                        <p className="text-2xl font-mono text-blue-900">
+                            {siniestroId?.slice(0, 8).toUpperCase() || 'Pendiente'}
+                        </p>
                     </CardContent>
                 </Card>
                 <div className="w-full pt-8">
@@ -48,6 +62,20 @@ export default function StepConfirmation({ onBack }: StepConfirmationProps) {
             </div>
         );
     }
+
+    // Calcular resumen de daños
+    const dañosDetectados = evidencias
+        .filter(ev => ev.analisis)
+        .flatMap(ev => ev.analisis?.partes_danadas || []);
+
+    const severidadMax = evidencias
+        .map(ev => ev.analisis?.severidad)
+        .reduce((max, current) => {
+            if (current === 'perdida_total') return 'perdida_total';
+            if (current === 'grave' && max !== 'perdida_total') return 'grave';
+            if (current === 'moderado' && max !== 'grave' && max !== 'perdida_total') return 'moderado';
+            return max || current;
+        }, 'leve');
 
     return (
         <div className="flex flex-col h-full space-y-6">
@@ -65,23 +93,46 @@ export default function StepConfirmation({ onBack }: StepConfirmationProps) {
                         <MapPin className="w-5 h-5 text-blue-500 mt-0.5" />
                         <div>
                             <p className="font-medium text-sm text-gray-900">Ubicación</p>
-                            <p className="text-xs text-gray-500">Lat: -33.4372, Lng: -70.6506</p>
+                            <p className="text-xs text-gray-500">Registrada automáticamente</p>
                         </div>
                     </div>
 
                     <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
                         <Camera className="w-5 h-5 text-blue-500 mt-0.5" />
-                        <div>
-                            <p className="font-medium text-sm text-gray-900">Evidencias</p>
-                            <p className="text-xs text-gray-500">4 Fotos adjuntas</p>
+                        <div className="w-full">
+                            <p className="font-medium text-sm text-gray-900">Evidencias ({evidencias.length})</p>
+
+                            {evidencias.length > 0 ? (
+                                <div className="mt-2 space-y-2">
+                                    <div className="flex flex-wrap gap-1">
+                                        {evidencias.map((ev, i) => (
+                                            <div key={i} className={`w-8 h-8 rounded overflow-hidden border ${!ev.analisis ? 'border-red-300' : 'border-green-300'}`}>
+                                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                <img src={ev.previewUrl} className="w-full h-full object-cover" alt="" />
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {dañosDetectados.length > 0 && (
+                                        <div className="text-xs bg-white p-2 rounded border border-gray-100">
+                                            <p className="font-semibold text-gray-700 mb-1">IA Detectó:</p>
+                                            <p className="text-gray-500 capitalize">{dañosDetectados.join(', ').slice(0, 100)}...</p>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-red-400 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" /> Sin evidencias
+                                </p>
+                            )}
                         </div>
                     </div>
 
-                    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                        <Mic className="w-5 h-5 text-blue-500 mt-0.5" />
+                    <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg opacity-50">
+                        <Mic className="w-5 h-5 text-gray-400 mt-0.5" />
                         <div>
                             <p className="font-medium text-sm text-gray-900">Relato</p>
-                            <p className="text-xs text-gray-500">Audio de 0:45s listo para enviar.</p>
+                            <p className="text-xs text-gray-500">Audio opcional (no grabado)</p>
                         </div>
                     </div>
                 </CardContent>
@@ -91,9 +142,9 @@ export default function StepConfirmation({ onBack }: StepConfirmationProps) {
                 <Button
                     onClick={handleSubmit}
                     className="w-full h-14 text-lg font-bold bg-blue-700 hover:bg-blue-800 shadow-xl flex items-center justify-center gap-2"
-                    disabled={submitting}
+                    disabled={submitting || contextLoading || evidencias.length === 0}
                 >
-                    {submitting ? (
+                    {submitting || contextLoading ? (
                         <>
                             <Loader2 className="w-6 h-6 animate-spin" />
                             Enviando...
