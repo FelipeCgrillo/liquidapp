@@ -1,3 +1,5 @@
+export const dynamic = 'force-static';
+
 export default function ProbePage() {
     return (
         <div style={{ padding: '50px', fontFamily: 'sans-serif', textAlign: 'center' }}>
