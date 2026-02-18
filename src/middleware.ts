@@ -42,7 +42,10 @@ export async function middleware(request: NextRequest) {
 
     // Rutas públicas (no requieren autenticación)
     const rutasPublicas = ['/login', '/registro', '/', '/campo/nuevo-siniestro', '/claim/wizard'];
-    const esRutaPublica = rutasPublicas.some((ruta) => pathname === ruta) || pathname.match(/^\/campo\/siniestro\/.*\/evidencias$/) || pathname.startsWith('/claim/');
+    const esRutaPublica =
+        rutasPublicas.includes(pathname) ||
+        pathname.match(/^\/campo\/siniestro\/.*\/evidencias$/) ||
+        pathname.startsWith('/claim/');
 
     // Si no está autenticado y accede a ruta protegida → redirigir a login
     if (!user && !esRutaPublica) {
@@ -63,6 +66,20 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js|workbox-.*\\.js|presentation.html|campo/nuevo-siniestro|campo/siniestro/.*/evidencias).*)',
+        /*
+         * Match all request paths except for the ones starting with:
+         * - _next/static (static files)
+         * - _next/image (image optimization files)
+         * - favicon.ico (favicon file)
+         * - manifest.json
+         * - icons
+         * - sw.js (service worker)
+         * - workbox-*.js (workbox scripts)
+         * - presentation.html
+         * - campo/nuevo-siniestro
+         * - campo/siniestro/[id]/evidencias
+         * - claim (client wizard)
+         */
+        '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js|workbox-.*\\.js|presentation.html|campo/nuevo-siniestro|campo/siniestro/.*/evidencias|claim).*)',
     ],
 };
