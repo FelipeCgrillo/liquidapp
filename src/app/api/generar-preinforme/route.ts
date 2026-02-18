@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@/lib/supabase/server';
+import type { SiniestroCompleto, AnalisisIA } from '@/types';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -20,7 +21,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Obtener datos completos del siniestro
-        const { data: siniestro } = await supabase
+        const { data } = await supabase
             .from('siniestros')
             .select(`
         *,
@@ -36,23 +37,25 @@ export async function POST(request: NextRequest) {
             .eq('id', siniestro_id)
             .single();
 
-        if (!siniestro) {
+        if (!data) {
             return NextResponse.json({ error: 'Siniestro no encontrado' }, { status: 404 });
         }
 
+        const siniestro = data as unknown as SiniestroCompleto;
+
         // Construir contexto para el pre-informe
-        const evidenciasTexto = siniestro.evidencias?.map((ev: Record<string, unknown>, i: number) => {
-            const analisis = (ev.analisis_ia as Record<string, unknown>[])?.[0];
+        const evidenciasTexto = siniestro.evidencias?.map((ev, i: number) => {
+            const analisis = ev.analisis_ia?.[0];
             if (!analisis) return `Evidencia ${i + 1}: Sin análisis`;
             return `
 Evidencia ${i + 1}:
 - Descripción: ${ev.descripcion || 'Sin descripción'}
 - Severidad: ${analisis.severidad}
-- Score Fraude: ${((analisis.score_fraude as number) * 100).toFixed(0)}% (${analisis.nivel_fraude})
-- Partes dañadas: ${(analisis.partes_danadas as string[])?.join(', ') || 'No especificado'}
+- Score Fraude: ${(analisis.score_fraude * 100).toFixed(0)}% (${analisis.nivel_fraude})
+- Partes dañadas: ${analisis.partes_danadas?.join(', ') || 'No especificado'}
 - Daños: ${analisis.descripcion_danos}
-- Costo estimado: $${(analisis.costo_estimado_min as number)?.toLocaleString('es-CL')} - $${(analisis.costo_estimado_max as number)?.toLocaleString('es-CL')} CLP
-${(analisis.indicadores_fraude as string[])?.length ? `- ⚠️ Indicadores de fraude: ${(analisis.indicadores_fraude as string[]).join(', ')}` : ''}`;
+- Costo estimado: $${analisis.costo_estimado_min.toLocaleString('es-CL')} - $${analisis.costo_estimado_max.toLocaleString('es-CL')} CLP
+${analisis.indicadores_fraude?.length ? `- ⚠️ Indicadores de fraude: ${analisis.indicadores_fraude.join(', ')}` : ''}`;
         }).join('\n') || 'Sin evidencias analizadas';
 
         const prompt = `Genera un pre-informe técnico de liquidación de siniestro automotriz en formato Markdown.

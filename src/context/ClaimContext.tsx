@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { EvidenciaConAnalisis, Siniestro } from '@/types';
 import toast from 'react-hot-toast';
+import { useEvidenceUpload } from '@/hooks/useEvidenceUpload';
 
 interface ClaimContextType {
     siniestroId: string | null;
@@ -65,6 +66,47 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    // Suscripción Realtime a cambios en análisis
+    useEffect(() => {
+        if (!siniestroId) return;
+
+        const supabase = createClient();
+        const channel = supabase
+            .channel('analisis-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'analisis_ia',
+                    filter: `siniestro_id=eq.${siniestroId}`
+                },
+                (payload) => {
+                    // Cuando llega un nuevo análisis, actualizar la evidencia correspondiente
+                    const nuevoAnalisis = payload.new;
+                    setEvidencias(prev => prev.map(ev => {
+                        if (ev.id === nuevoAnalisis.evidencia_id) {
+                            return {
+                                ...ev,
+                                analizando: false,
+                                analizado: true,
+                                analisis: nuevoAnalisis as any // Cast necesario por tipos generados/dinámicos
+                            };
+                        }
+                        return ev;
+                    }));
+                    toast.success('Análisis completado');
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [siniestroId]);
+
+    const { uploadAndAnalyze } = useEvidenceUpload();
+
     const agregarEvidencia = async (file: File, tipo: string) => {
         let currentSiniestroId = siniestroId;
         if (!currentSiniestroId) {
@@ -86,75 +128,36 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
             capturado_at: new Date().toISOString(),
             created_at: new Date().toISOString(),
             previewUrl,
-            descripcion: tipo // Usamos descripción para guardar qué vista es (Frente, Trasera, etc)
+            descripcion: tipo
         };
 
         setEvidencias(prev => [...prev, nuevaEvidencia]);
 
         try {
-            const supabase = createClient();
-            const extension = file.name.split('.').pop() || 'jpg';
-            const nombreArchivo = `${currentSiniestroId}/${Date.now()}.${extension}`;
+            // 2. Usar hook centralizado para subir y analizar (ENCOLADO / ASYNC)
+            // Pasamos queueAnalysis: true para evitar bloqueo de UI
+            const evidenciaSubida = await uploadAndAnalyze(file, {
+                siniestroId: currentSiniestroId!,
+                description: tipo,
+                order: evidencias.length
+            }, true);
 
-            // 2. Subir a Storage
-            const { error: uploadError } = await supabase.storage
-                .from('evidencias-siniestros')
-                .upload(nombreArchivo, file, { contentType: file.type });
-
-            if (uploadError) throw uploadError;
-
-            // 3. Crear registro en BD
-            const { data: dbData, error: dbError } = await supabase
-                .from('evidencias')
-                .insert({
-                    siniestro_id: currentSiniestroId,
-                    storage_path: nombreArchivo,
-                    nombre_archivo: file.name,
-                    tipo_mime: file.type,
-                    tamaño_bytes: file.size,
-                    descripcion: tipo,
-                    orden: evidencias.length
-                })
-                .select()
-                .single();
-
-            if (dbError) throw dbError;
-
-            // 4. Iniciar análisis IA
-            // Obtener URL firmada para la IA
-            const { data: urlData } = await supabase.storage
-                .from('evidencias-siniestros')
-                .createSignedUrl(nombreArchivo, 3600);
-
-            const respuestaIA = await fetch('/api/analizar-evidencia', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    evidencia_id: dbData.id,
-                    imagen_url: urlData?.signedUrl,
-                    siniestro_id: currentSiniestroId
-                })
-            });
-
-            const resultadoIA = await respuestaIA.json();
-
-            // 5. Actualizar estado con resultado real
+            // 3. Actualizar estado con la evidencia persistida (aún analizando)
             setEvidencias(prev => prev.map(ev =>
                 ev.id === tempId ? {
-                    ...dbData,
-                    previewUrl,
-                    analizando: false,
-                    analizado: true,
-                    analisis: resultadoIA.analisis
+                    ...evidenciaSubida,
+                    previewUrl, // Mantener previewUrl local
+                    analizando: true // Asegurar que sigue analizando
                 } : ev
             ));
 
-            toast.success('Evidencia analizada correctamente');
+            // No hacemos toast de éxito aquí, esperamos al Realtime o ignoramos si es background
+            // toast.success('Evidencia subida, analizando...');
 
         } catch (error) {
             console.error('Error procesando evidencia:', error);
             toast.error('Error al procesar la imagen');
-            // Revertir estado o marcar error
+            // Revertir estado
             setEvidencias(prev => prev.filter(ev => ev.id !== tempId));
         }
     };

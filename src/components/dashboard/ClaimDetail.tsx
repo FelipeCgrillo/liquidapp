@@ -3,37 +3,27 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Play, Pause, FileText, Calendar, MapPin, User, ShieldAlert } from 'lucide-react';
+import { Play, Pause, FileText, Calendar, MapPin, User, ShieldAlert, Car, ImageIcon } from 'lucide-react';
 import { useState } from 'react';
+import type { SiniestroCompleto } from '@/types';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
-const MOCK_PHOTOS = [
-    {
-        id: 1,
-        src: 'https://images.unsplash.com/photo-1599525626243-77227e742886?q=80&w=600&auto=format&fit=crop', // Dented bumper
-        label: 'Frontal',
-        annotations: [
-            { x: 30, y: 40, width: 40, height: 30, label: 'Parachoques: Abolladura (Severo)' }
-        ]
-    },
-    {
-        id: 2,
-        src: 'https://images.unsplash.com/photo-1562920610-1845bb0e816a?q=80&w=600&auto=format&fit=crop', // Side scratch
-        label: 'Lateral',
-        annotations: [
-            { x: 50, y: 50, width: 20, height: 10, label: 'Puerta: Rayón (Leve)' }
-        ]
-    },
-    {
-        id: 3,
-        src: 'https://images.unsplash.com/photo-1489824904134-891ab64532f1?q=80&w=600&auto=format&fit=crop', // Car interior/dashboard
-        label: 'Interior',
-        annotations: []
-    }
-];
+interface ClaimDetailProps {
+    siniestro: SiniestroCompleto | null;
+}
 
-export function ClaimDetail() {
+export function ClaimDetail({ siniestro }: ClaimDetailProps) {
     const [playing, setPlaying] = useState(false);
+
+    if (!siniestro) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                <Car className="w-16 h-16 mb-4 text-gray-200" />
+                <p>Selecciona un siniestro para ver los detalles</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -45,20 +35,22 @@ export function ClaimDetail() {
                 <CardContent className="grid grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                         <Calendar className="w-4 h-4 text-gray-400" />
-                        <span>18 Feb 2026, 14:30</span>
+                        <span>{format(new Date(siniestro.created_at), 'd MMM yyyy, HH:mm', { locale: es })}</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-gray-400" />
-                        <span>Av. Apoquindo 4500, Las Condes</span>
+                        <span className="truncate">{siniestro.direccion || 'Ubicación no registrada'}</span>
                     </div>
                     <div className="flex items-center gap-2">
                         <User className="w-4 h-4 text-gray-400" />
-                        <span>Rut: 12.345.678-9</span>
+                        <span>{siniestro.nombre_asegurado}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-amber-600 font-medium">
-                        <ShieldAlert className="w-4 h-4" />
-                        <span>Riesgo Detectado</span>
-                    </div>
+                    {siniestro.score_fraude_general && siniestro.score_fraude_general > 0.6 && (
+                        <div className="flex items-center gap-2 text-red-600 font-medium">
+                            <ShieldAlert className="w-4 h-4" />
+                            <span>Alto Riesgo Detectado</span>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -69,33 +61,47 @@ export function ClaimDetail() {
                     <Badge variant="secondary" className="bg-blue-100 text-blue-700">AI Analyzed</Badge>
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
-                    {MOCK_PHOTOS.map((photo) => (
-                        <div key={photo.id} className="relative group rounded-lg overflow-hidden cursor-pointer border border-gray-200 shadow-sm aspect-video">
-                            <img src={photo.src} alt={photo.label} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
-                            <span className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">
-                                {photo.label}
-                            </span>
+                    {siniestro.evidencias?.map((ev) => {
+                        // Usar url_publica (inyectada por el padre)
+                        const imgSrc = ev.url_publica || '';
+                        // En SiniestroCompleto, las evidencias tienen analisis_ia[]
+                        const analisis = ev.analisis_ia?.[0];
 
-                            {/* AI Annotations (Ghost Overlay) */}
-                            {photo.annotations.map((ann, i) => (
-                                <div
-                                    key={i}
-                                    className="absolute border-2 border-red-500 bg-red-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                                    style={{
-                                        left: `${ann.x}%`,
-                                        top: `${ann.y}%`,
-                                        width: `${ann.width}%`,
-                                        height: `${ann.height}%`
-                                    }}
-                                >
-                                    <span className="absolute -top-6 left-0 bg-red-600 text-white text-[10px] px-1 py-0.5 rounded shadow-sm whitespace-nowrap">
-                                        {ann.label}
-                                    </span>
-                                </div>
-                            ))}
+                        return (
+                            <div key={ev.id} className="relative group rounded-lg overflow-hidden cursor-pointer border border-gray-200 shadow-sm aspect-video bg-gray-100">
+                                {imgSrc ? (
+                                    <img src={imgSrc} alt={ev.descripcion || 'Evidencia'} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                        <ImageIcon className="w-8 h-8" />
+                                    </div>
+                                )}
+
+                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                <span className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded backdrop-blur-sm">
+                                    {ev.descripcion || 'Sin etiqueta'}
+                                </span>
+
+                                {/* AI Annotations (Ghost Overlay) */}
+                                {analisis?.partes_danadas?.map((parte: string, i: number) => (
+                                    <div
+                                        key={i}
+                                        className="absolute top-2 right-2"
+                                    >
+                                        <span className="bg-red-600 text-white text-[10px] px-1 py-0.5 rounded shadow-sm whitespace-nowrap">
+                                            {parte.replace(/_/g, ' ')}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
+                    {(!siniestro.evidencias || siniestro.evidencias.length === 0) && (
+                        <div className="col-span-2 text-center py-8 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
+                            <ImageIcon className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                            No hay evidencias visuales
                         </div>
-                    ))}
+                    )}
                 </div>
             </div>
 
@@ -112,19 +118,19 @@ export function ClaimDetail() {
                             {playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                         </Button>
                         <div className="h-10 flex-1 bg-white rounded-lg border border-gray-200 flex items-center px-3 gap-1 overflow-hidden">
-                            {/* Fake waveform */}
+                            {/* Fake waveform placeholder */}
                             {[...Array(20)].map((_, i) => (
                                 <div key={i} className="w-1 bg-indigo-200 rounded-full" style={{ height: `${Math.random() * 80 + 20}%` }}></div>
                             ))}
                         </div>
-                        <span className="text-xs font-mono text-gray-500">0:45</span>
+                        <span className="text-xs font-mono text-gray-500">00:00</span>
                     </div>
 
                     <div className="bg-white p-3 rounded-lg border border-gray-100 text-sm text-gray-700 leading-relaxed">
                         <span className="font-bold block text-xs text-gray-400 mb-1 flex items-center gap-1">
-                            <FileText className="w-3 h-3" /> TRANSCRIPCIÓN IA
+                            <FileText className="w-3 h-3" /> DESCRIPCIÓN DEL SINIESTRO
                         </span>
-                        &quot;Iba circulando por Avenida Apoquindo cuando un vehículo rojo intentó adelantarme por la derecha y golpeó mi parachoques delantero. Me detuve a intercambiar datos y...&quot;
+                        {siniestro.descripcion || "Sin descripción disponible."}
                     </div>
                 </CardContent>
             </Card>

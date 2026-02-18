@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Evidencia, AnalisisIA, SeveridadDano, NivelFraude, EvidenciaConAnalisis } from '@/types';
+import { useEvidenceUpload } from '@/hooks/useEvidenceUpload';
 
 const COLORES_SEVERIDAD: Record<SeveridadDano, string> = {
     leve: 'text-green-400 bg-green-900/30 border-green-700/50',
@@ -71,6 +72,8 @@ export default function EvidenciasPage() {
         });
     };
 
+    const { uploadAndAnalyze } = useEvidenceUpload();
+
     const procesarImagen = useCallback(async (file: File) => {
         const previewUrl = URL.createObjectURL(file);
         const tempId = `temp-${Date.now()}`;
@@ -90,66 +93,22 @@ export default function EvidenciasPage() {
         setEvidencias((prev) => [...prev, evidenciaTemp]);
 
         try {
-            const supabase = createClient();
             const geo = await obtenerGeolocalizacion();
 
-            // Subir imagen a Supabase Storage
-            const extension = file.name.split('.').pop() || 'jpg';
-            const nombreArchivo = `${siniestroId}/${Date.now()}.${extension}`;
-
-            const { error: uploadError } = await supabase.storage
-                .from('evidencias-siniestros')
-                .upload(nombreArchivo, file, { contentType: file.type });
-
-            if (uploadError) throw uploadError;
-
-            // Obtener URL firmada (válida por 1 hora para el análisis IA)
-            const { data: urlData } = await supabase.storage
-                .from('evidencias-siniestros')
-                .createSignedUrl(nombreArchivo, 3600);
-
-            // Guardar evidencia en la base de datos
-            const { data: evidenciaDB, error: evidenciaError } = await supabase
-                .from('evidencias')
-                .insert({
-                    siniestro_id: siniestroId,
-                    storage_path: nombreArchivo,
-                    nombre_archivo: file.name,
-                    tipo_mime: file.type,
-                    tamaño_bytes: file.size,
-                    latitud: geo?.lat,
-                    longitud: geo?.lng,
-                    precision_metros: geo?.precision,
-                    orden: evidencias.length,
-                })
-                .select()
-                .single();
-
-            if (evidenciaError) throw evidenciaError;
-
-            // Analizar con IA
-            const respuestaIA = await fetch('/api/analizar-evidencia', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    evidencia_id: evidenciaDB.id,
-                    imagen_url: urlData?.signedUrl,
-                    siniestro_id: siniestroId,
-                }),
+            // Usar hook centralizado
+            const evidenciaAnalizada = await uploadAndAnalyze(file, {
+                siniestroId,
+                location: geo ? { lat: geo.lat, lng: geo.lng, precision: geo.precision } : undefined,
+                order: evidencias.length
             });
-
-            const resultadoIA = await respuestaIA.json();
 
             // Actualizar evidencia con análisis
             setEvidencias((prev) =>
                 prev.map((ev) =>
                     ev.id === tempId
                         ? {
-                            ...evidenciaDB,
-                            previewUrl,
-                            analizando: false,
-                            analizado: true,
-                            analisis: resultadoIA.analisis,
+                            ...evidenciaAnalizada,
+                            previewUrl, // Mantener previewUrl local
                         }
                         : ev
                 )
@@ -161,7 +120,7 @@ export default function EvidenciasPage() {
             setEvidencias((prev) => prev.filter((ev) => ev.id !== tempId));
             toast.error('Error al procesar la imagen. Intenta nuevamente.');
         }
-    }, [evidencias.length, siniestroId]);
+    }, [evidencias.length, siniestroId, uploadAndAnalyze]);
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);

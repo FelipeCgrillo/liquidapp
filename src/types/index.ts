@@ -24,9 +24,9 @@ export interface Siniestro {
     numero_siniestro: string;
     // Vehículo
     patente: string;
-    marca: string; // Made mandatory
-    modelo: string; // Made mandatory
-    anio: number; // Made mandatory
+    marca: string;
+    modelo: string;
+    anio: number;
     color?: string;
     // Asegurado
     nombre_asegurado: string;
@@ -35,7 +35,7 @@ export interface Siniestro {
     email_asegurado?: string;
     poliza_numero?: string;
     // Siniestro
-    fecha_siniestro: string;
+    fecha_siniestro: string; // timestampz
     tipo_siniestro: string;
     descripcion?: string;
     // Geolocalización
@@ -56,18 +56,13 @@ export interface Siniestro {
     updated_at: string;
     enviado_revision_at?: string;
     cerrado_at?: string;
-    // Relaciones (joins)
-    liquidador_campo?: Perfil;
-    liquidador_senior?: Perfil;
-    evidencias?: Evidencia[];
-    pre_informe?: PreInforme;
 }
 
 export interface Evidencia {
     id: string;
     siniestro_id: string;
     storage_path: string;
-    url_publica?: string;
+    url_publica?: string; // Propiedad virtual/inyectada
     nombre_archivo?: string;
     tipo_mime?: string;
     tamaño_bytes?: number;
@@ -79,22 +74,23 @@ export interface Evidencia {
     analizado: boolean;
     capturado_at: string;
     created_at: string;
-    // Relaciones
-    analisis?: AnalisisIA;
-    analisis_ia?: AnalisisIA[]; // Add specific relation for Supabase
+    // Relaciones (Raw Supabase)
+    analisis_ia?: AnalisisIA[];
 }
 
 export interface EvidenciaConAnalisis extends Evidencia {
-    analisis?: AnalisisIA;
+    // Propiedades de conveniencia/UI
+    analisis?: AnalisisIA; // Para compatibilidad con useEvidenceUpload (resultado inmediato)
     analizando?: boolean;
     previewUrl?: string;
 }
 
 export interface SiniestroCompleto extends Siniestro {
-    evidencias: EvidenciaConAnalisis[];
-    pre_informe?: PreInforme;
-    liquidador_campo?: Perfil;
-    liquidador_senior?: Perfil;
+    // Relaciones expandidas
+    evidencias: (Evidencia & { analisis_ia: AnalisisIA[] })[];
+    pre_informe: PreInforme | null; // Asumiendo relación 1:1 o 0:1
+    liquidador_campo: { nombre_completo: string; telefono: string | null } | null;
+    liquidador_senior: { nombre_completo: string; telefono: string | null } | null;
 }
 
 export interface AnalisisIA {
@@ -113,11 +109,11 @@ export interface AnalisisIA {
     // Costos
     costo_estimado_min: number;
     costo_estimado_max: number;
-    desglose_costos?: Record<string, unknown>;
+    desglose_costos?: Record<string, unknown>; // JSONB
     // Metadata IA
     prompt_version?: string;
     modelo_ia?: string;
-    respuesta_raw?: Record<string, unknown>;
+    respuesta_raw?: Record<string, unknown>; // JSONB
     tokens_usados?: number;
     created_at: string;
     procesado_at: string;
