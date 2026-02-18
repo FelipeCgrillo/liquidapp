@@ -38,13 +38,48 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const [flash, setFlash] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
+    const [cameraError, setCameraError] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const currentPhoto = REQUIRED_PHOTOS[currentStep];
 
     // Buscar evidencia actual en el contexto
     const currentEvidence = evidencias.find(e => e.descripcion === currentPhoto.id);
 
+    const handleCameraError = useCallback((error: string | DOMException) => {
+        console.error("Camera error:", error);
+        setCameraError(true);
+        toast.error("No se pudo acceder a la cámara. Usa la opción de subir foto.");
+    }, []);
+
+    const processFile = async (file: File) => {
+        setIsCapturing(true);
+        try {
+            await agregarEvidencia(file, currentPhoto.id);
+            if (currentStep < REQUIRED_PHOTOS.length - 1) {
+                setTimeout(() => setCurrentStep(prev => prev + 1), 500);
+            }
+        } catch (error) {
+            console.error("Error saving file:", error);
+            toast.error("Error al guardar la foto");
+        } finally {
+            setIsCapturing(false);
+        }
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            processFile(file);
+        }
+    };
+
     const capture = useCallback(async () => {
+        if (cameraError) {
+            fileInputRef.current?.click();
+            return;
+        }
+
         const imageSrc = webcamRef.current?.getScreenshot();
         if (imageSrc) {
             setFlash(true);
@@ -53,23 +88,15 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
 
             try {
                 const file = dataURLtoFile(imageSrc, `${currentPhoto.id}.jpg`);
-                await agregarEvidencia(file, currentPhoto.id);
-
-                // Auto advance only if successful
-                if (currentStep < REQUIRED_PHOTOS.length - 1) {
-                    setTimeout(() => setCurrentStep(prev => prev + 1), 500);
-                }
+                await processFile(file);
             } catch (error) {
                 console.error("Error capturing:", error);
-                toast.error("Error al guardar la foto");
-            } finally {
                 setIsCapturing(false);
             }
         }
-    }, [webcamRef, currentStep, currentPhoto, agregarEvidencia]);
+    }, [webcamRef, currentStep, currentPhoto, cameraError]);
 
     const retake = (id: string) => {
-        // Encontrar evidencia por descripción (id del paso)
         const ev = evidencias.find(e => e.descripcion === id);
         if (ev) {
             eliminarEvidencia(ev.id);
@@ -99,30 +126,59 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
                 </div>
             </div>
 
-            <div className="relative flex-grow overflow-hidden bg-black rounded-2xl shadow-inner group">
+            <div className="relative flex-grow overflow-hidden bg-black rounded-2xl shadow-inner group min-h-[300px]">
                 {!currentEvidence ? (
                     <>
-                        <Webcam
-                            audio={false}
-                            ref={webcamRef}
-                            screenshotFormat="image/jpeg"
-                            videoConstraints={{ facingMode: "environment" }}
-                            className="absolute inset-0 w-full h-full object-cover"
-                        />
-                        {/* Ghost Overlay */}
-                        <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-white/30 m-8 rounded-2xl flex items-center justify-center">
-                            <Car className="w-32 h-32 text-white/10" />
-                            <p className="absolute bottom-8 text-white/90 text-sm font-medium bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                                Alinea: {currentPhoto.label}
-                            </p>
-                        </div>
+                        {!cameraError ? (
+                            <Webcam
+                                audio={false}
+                                ref={webcamRef}
+                                screenshotFormat="image/jpeg"
+                                videoConstraints={{
+                                    facingMode: "environment",
+                                    width: { ideal: 1280 },
+                                    height: { ideal: 720 }
+                                }}
+                                onUserMediaError={handleCameraError}
+                                playsInline={true}
+                                muted={true}
+                                className="absolute inset-0 w-full h-full object-cover"
+                            />
+                        ) : (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white p-6 text-center">
+                                <AlertTriangle className="w-12 h-12 text-yellow-500 mb-4" />
+                                <h3 className="text-lg font-bold mb-2">Cámara no disponible</h3>
+                                <p className="text-sm text-gray-400 mb-6">
+                                    No pudimos acceder a tu cámara. Puedes subir una foto o tomarla con la app nativa.
+                                </p>
+                                <Button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    variant="secondary"
+                                    className="w-full max-w-xs"
+                                >
+                                    <Camera className="w-5 h-5 mr-2" />
+                                    Abrir Cámara / Subir Foto
+                                </Button>
+                            </div>
+                        )}
+
+                        {/* Ghost Overlay (only if camera is working) */}
+                        {!cameraError && (
+                            <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-white/30 m-8 rounded-2xl flex items-center justify-center">
+                                <Car className="w-32 h-32 text-white/10" />
+                                <p className="absolute bottom-8 text-white/90 text-sm font-medium bg-black/40 backdrop-blur-sm px-3 py-1.5 rounded-full">
+                                    Alinea: {currentPhoto.label}
+                                </p>
+                            </div>
+                        )}
+
                         {flash && <div className="absolute inset-0 bg-white animate-pulse z-50"></div>}
                     </>
                 ) : (
                     <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                            src={currentEvidence.previewUrl || currentEvidence.storage_path} // Fallback to storage path if preview lost, though previewUrl should be there
+                            src={currentEvidence.previewUrl || currentEvidence.storage_path}
                             alt="Captured"
                             className="w-full h-full object-contain"
                         />
@@ -145,8 +201,8 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
                                     <div>
                                         <p className="text-white font-bold text-lg">Análisis Completo</p>
                                         <p className={`text-sm font-medium px-2 py-0.5 rounded-full inline-block mt-1 ${currentEvidence.analisis.severidad === 'leve' ? 'bg-green-500/20 text-green-300' :
-                                                currentEvidence.analisis.severidad === 'moderado' ? 'bg-yellow-500/20 text-yellow-300' :
-                                                    'bg-red-500/20 text-red-300'
+                                            currentEvidence.analisis.severidad === 'moderado' ? 'bg-yellow-500/20 text-yellow-300' :
+                                                'bg-red-500/20 text-red-300'
                                             }`}>
                                             Daño {currentEvidence.analisis.severidad}
                                         </p>
@@ -162,6 +218,16 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
                     </div>
                 )}
             </div>
+
+            {/* Hidden File Input for Fallback */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleFileUpload}
+            />
 
             <div className="grid grid-cols-4 gap-2 h-20">
                 {REQUIRED_PHOTOS.map((photo, index) => {
@@ -214,7 +280,7 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
                         disabled={!!currentEvidence || isCapturing}
                     >
                         {isCapturing ? <Loader2 className="w-5 h-5 animate-spin mr-2" /> : <Camera className="w-5 h-5 mr-2" />}
-                        {isCapturing ? 'Guardando...' : 'Capturar'}
+                        {isCapturing ? 'Guardando...' : (cameraError ? 'Subir Foto' : 'Capturar')}
                     </Button>
                 )}
             </div>
