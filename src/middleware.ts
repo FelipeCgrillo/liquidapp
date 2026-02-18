@@ -79,7 +79,8 @@ export const config = {
          * - campo/nuevo-siniestro
          * - campo/siniestro/[id]/evidencias
          * - claim (client wizard)
+         * - api/analizar-evidencia (public AI analysis)
          */
-        '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js|workbox-.*\\.js|presentation.html|campo/nuevo-siniestro|campo/siniestro/.*/evidencias|claim).*)',
+        '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js|workbox-.*\\.js|presentation.html|campo/nuevo-siniestro|campo/siniestro/.*/evidencias|claim|api/analizar-evidencia).*)',
     ],
 };

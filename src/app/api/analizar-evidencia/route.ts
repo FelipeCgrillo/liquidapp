@@ -49,13 +49,13 @@ IMPORTANTE: Responde SOLO con el JSON, sin texto adicional.`;
 
 export async function POST(request: NextRequest) {
     try {
-        // Verificar autenticación
+        // Autenticación opcional para soportar el wizard público
         const supabase = await createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        // const { data: { user } } = await supabase.auth.getUser();
 
-        if (!user) {
-            return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-        }
+        // if (!user) {
+        //     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+        // }
 
         const body = await request.json();
         const { evidencia_id, imagen_url, siniestro_id } = body;
