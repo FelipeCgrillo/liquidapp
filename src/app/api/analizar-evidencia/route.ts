@@ -1,0 +1,212 @@
+import { NextRequest, NextResponse } from 'next/server';
+import OpenAI from 'openai';
+import { createClient } from '@/lib/supabase/server';
+import type { ResultadoAnalisisIA } from '@/types';
+
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+});
+
+// Prompt de sistema para análisis de siniestros automotrices
+const SYSTEM_PROMPT = `Eres un perito experto en liquidación de siniestros automotrices con 20 años de experiencia.
+Analizas imágenes de vehículos dañados para:
+1. ANTIFRAUDE: Detectar inconsistencias, manipulación digital, daños preexistentes o escenificados
+2. TRIAJE: Clasificar la severidad del daño (leve/moderado/grave/perdida_total)
+3. COSTOS: Estimar rangos de costo de reparación en pesos chilenos (CLP)
+
+Responde SIEMPRE en formato JSON válido con la estructura exacta especificada.
+Sé conservador en las estimaciones de fraude (solo marca alto/critico si hay evidencia clara).
+Los costos deben reflejar el mercado chileno actual (talleres certificados).`;
+
+const USER_PROMPT = `Analiza esta imagen de un vehículo siniestrado y responde con el siguiente JSON exacto:
+
+{
+  "antifraude": {
+    "score": <número 0.0-1.0, donde 0=sin fraude, 1=fraude evidente>,
+    "nivel": <"bajo"|"medio"|"alto"|"critico">,
+    "indicadores": [<lista de indicadores detectados, vacía si no hay>],
+    "justificacion": "<explicación breve de la evaluación antifraude>"
+  },
+  "triage": {
+    "severidad": <"leve"|"moderado"|"grave"|"perdida_total">,
+    "partes_danadas": [<lista de partes dañadas en español, ej: "parachoque_delantero", "capot", "faro_derecho">],
+    "descripcion": "<descripción técnica de los daños observados>"
+  },
+  "costos": {
+    "min": <costo mínimo en CLP como número entero>,
+    "max": <costo máximo en CLP como número entero>,
+    "desglose": [
+      {
+        "parte": "<nombre de la parte>",
+        "costo_min": <número entero CLP>,
+        "costo_max": <número entero CLP>
+      }
+    ]
+  }
+}
+
+IMPORTANTE: Responde SOLO con el JSON, sin texto adicional.`;
+
+export async function POST(request: NextRequest) {
+    try {
+        // Verificar autenticación
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (!user) {
+            return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+        }
+
+        const body = await request.json();
+        const { evidencia_id, imagen_url, siniestro_id } = body;
+
+        if (!evidencia_id || !imagen_url || !siniestro_id) {
+            return NextResponse.json(
+                { error: 'Se requieren evidencia_id, imagen_url y siniestro_id' },
+                { status: 400 }
+            );
+        }
+
+        // Llamar a GPT-4o Vision
+        const response = await openai.chat.completions.create({
+            model: 'gpt-4o',
+            max_tokens: 1500,
+            messages: [
+                {
+                    role: 'system',
+                    content: SYSTEM_PROMPT,
+                },
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: imagen_url,
+                                detail: 'high',
+                            },
+                        },
+                        {
+                            type: 'text',
+                            text: USER_PROMPT,
+                        },
+                    ],
+                },
+            ],
+        });
+
+        const contenidoRaw = response.choices[0]?.message?.content || '{}';
+        let resultado: ResultadoAnalisisIA;
+
+        try {
+            resultado = JSON.parse(contenidoRaw);
+        } catch {
+            console.error('Error parseando respuesta IA:', contenidoRaw);
+            return NextResponse.json(
+                { error: 'Error al procesar la respuesta de la IA' },
+                { status: 500 }
+            );
+        }
+
+        // Determinar nivel de fraude desde el score
+        const determinarNivelFraude = (score: number): string => {
+            if (score < 0.25) return 'bajo';
+            if (score < 0.5) return 'medio';
+            if (score < 0.75) return 'alto';
+            return 'critico';
+        };
+
+        const nivelFraude = resultado.antifraude.nivel ||
+            determinarNivelFraude(resultado.antifraude.score);
+
+        // Guardar análisis en la base de datos
+        const { data: analisis, error: errorAnalisis } = await supabase
+            .from('analisis_ia')
+            .insert({
+                evidencia_id,
+                siniestro_id,
+                score_fraude: resultado.antifraude.score,
+                nivel_fraude: nivelFraude,
+                indicadores_fraude: resultado.antifraude.indicadores || [],
+                justificacion_fraude: resultado.antifraude.justificacion,
+                severidad: resultado.triage.severidad,
+                partes_danadas: resultado.triage.partes_danadas || [],
+                descripcion_danos: resultado.triage.descripcion,
+                costo_estimado_min: resultado.costos.min,
+                costo_estimado_max: resultado.costos.max,
+                desglose_costos: resultado.costos.desglose,
+                modelo_ia: 'gpt-4o',
+                respuesta_raw: { contenido: contenidoRaw, parsed: resultado },
+                tokens_usados: response.usage?.total_tokens,
+            })
+            .select()
+            .single();
+
+        if (errorAnalisis) {
+            console.error('Error guardando análisis:', errorAnalisis);
+            return NextResponse.json(
+                { error: 'Error al guardar el análisis' },
+                { status: 500 }
+            );
+        }
+
+        // Marcar evidencia como analizada
+        await supabase
+            .from('evidencias')
+            .update({ analizado: true })
+            .eq('id', evidencia_id);
+
+        // Actualizar resumen del siniestro con el análisis más crítico
+        await actualizarResumenSiniestro(supabase, siniestro_id);
+
+        return NextResponse.json({
+            success: true,
+            analisis,
+            resultado,
+        });
+    } catch (error) {
+        console.error('Error en análisis IA:', error);
+        return NextResponse.json(
+            { error: 'Error interno del servidor' },
+            { status: 500 }
+        );
+    }
+}
+
+/**
+ * Actualiza el resumen del siniestro con la severidad y score de fraude más críticos
+ */
+async function actualizarResumenSiniestro(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    siniestroId: string
+) {
+    const { data: analisis } = await supabase
+        .from('analisis_ia')
+        .select('severidad, score_fraude, costo_estimado_min, costo_estimado_max')
+        .eq('siniestro_id', siniestroId);
+
+    if (!analisis || analisis.length === 0) return;
+
+    const ordenSeveridad: Record<string, number> = {
+        leve: 1, moderado: 2, grave: 3, perdida_total: 4,
+    };
+
+    const severidadMax = analisis.reduce((max: string, a: { severidad: string }) => {
+        return (ordenSeveridad[a.severidad] || 0) > (ordenSeveridad[max] || 0)
+            ? a.severidad : max;
+    }, 'leve');
+
+    const scoreFraudeMax = Math.max(...analisis.map((a: { score_fraude: number | null }) => a.score_fraude || 0));
+    const costoMin = analisis.reduce((sum: number, a: { costo_estimado_min: number | null }) => sum + (a.costo_estimado_min || 0), 0);
+    const costoMax = analisis.reduce((sum: number, a: { costo_estimado_max: number | null }) => sum + (a.costo_estimado_max || 0), 0);
+
+    await supabase
+        .from('siniestros')
+        .update({
+            severidad_general: severidadMax,
+            score_fraude_general: scoreFraudeMax,
+            costo_estimado_min: costoMin,
+            costo_estimado_max: costoMax,
+        })
+        .eq('id', siniestroId);
+}
