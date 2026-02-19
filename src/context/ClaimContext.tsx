@@ -16,6 +16,7 @@ interface ClaimContextType {
     finalizarSiniestro: () => Promise<boolean>;
     actualizarUbicacion: (lat: number, lng: number) => Promise<void>;
     isLoading: boolean;
+    error: string | null;
     pasoActual: number;
     setPasoActual: React.Dispatch<React.SetStateAction<number>>;
 }
@@ -28,16 +29,20 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
     const [isLoading, setIsLoading] = useState(false);
     const [pasoActual, setPasoActual] = useState(0);
 
+    const [error, setError] = useState<string | null>(null);
+
     // Inicializar siniestro si no existe
     const crearSiniestro = React.useCallback(async () => {
         if (siniestroId) return siniestroId; // Ya existe
+        if (error) return null; // No reintentar si ya falló (bloqueo de loop)
 
         setIsLoading(true);
+        setError(null); // Resetear error al intentar de nuevo
         const supabase = createClient();
 
         try {
             // Crear un siniestro temporal/borrador
-            const { data, error } = await supabase
+            const { data, error: supabaseError } = await supabase
                 .from('siniestros')
                 .insert({
                     estado: 'borrador',
@@ -53,21 +58,23 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
                 .select('id')
                 .single();
 
-            if (error) throw error;
+            if (supabaseError) throw supabaseError;
 
-            setSiniestroId(data.id);
-            return data.id;
-        } catch (error) {
-            console.error('❌ Error crítico creando siniestro:', error);
-            if (error instanceof Error) {
-                console.error('Detalles:', error.message, error.stack);
+            if (data) {
+                setSiniestroId(data.id);
+                return data.id;
             }
+            throw new Error('No se recibió ID del siniestro');
+        } catch (e) {
+            console.error('❌ Error crítico creando siniestro:', e);
+            const errorMessage = e instanceof Error ? e.message : 'Error desconocido';
+            setError(errorMessage);
             toast.error('Error al iniciar el reporte. Verifique su conexión.');
             return null;
         } finally {
             setIsLoading(false);
         }
-    }, [siniestroId]);
+    }, [siniestroId, error]);
 
     // Suscripción Realtime a cambios en análisis
     useEffect(() => {
@@ -154,9 +161,6 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
                 } : ev
             ));
 
-            // No hacemos toast de éxito aquí, esperamos al Realtime o ignoramos si es background
-            // toast.success('Evidencia subida, analizando...');
-
         } catch (error) {
             console.error('Error procesando evidencia:', error);
             toast.error('Error al procesar la imagen');
@@ -167,7 +171,6 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
 
     const eliminarEvidencia = React.useCallback(async (id: string) => {
         setEvidencias(prev => prev.filter(ev => ev.id !== id));
-        // TODO: Eliminar de BD y Storage si no es temp
     }, []);
 
     const finalizarSiniestro = React.useCallback(async () => {
@@ -215,24 +218,37 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
             if (error) throw error;
         } catch (error) {
             console.error('Error actualizando ubicación:', error);
-            // No bloqueamos el flujo, solo logueamos
         }
     }, [siniestroId, crearSiniestro]);
 
+    const value = React.useMemo(() => ({
+        siniestroId,
+        evidencias,
+        setEvidencias,
+        agregarEvidencia,
+        eliminarEvidencia,
+        crearSiniestro,
+        finalizarSiniestro,
+        actualizarUbicacion,
+        isLoading,
+        error, // Exponer error
+        pasoActual,
+        setPasoActual
+    }), [
+        siniestroId,
+        evidencias,
+        isLoading,
+        error,
+        pasoActual,
+        agregarEvidencia,
+        eliminarEvidencia,
+        crearSiniestro,
+        finalizarSiniestro,
+        actualizarUbicacion
+    ]);
+
     return (
-        <ClaimContext.Provider value={{
-            siniestroId,
-            evidencias,
-            setEvidencias,
-            agregarEvidencia,
-            eliminarEvidencia,
-            crearSiniestro,
-            finalizarSiniestro,
-            actualizarUbicacion,
-            isLoading,
-            pasoActual,
-            setPasoActual
-        }}>
+        <ClaimContext.Provider value={value}>
             {children}
         </ClaimContext.Provider>
     );

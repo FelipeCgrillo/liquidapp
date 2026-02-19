@@ -17,15 +17,16 @@ const STEPS = [
 ];
 
 function WizardContent() {
-    const { pasoActual, setPasoActual, siniestroId, crearSiniestro, isLoading } = useClaim();
+    const { pasoActual, setPasoActual, siniestroId, crearSiniestro, isLoading, error } = useClaim();
     const [direction, setDirection] = useState(1);
 
     // Inicializar siniestro al cargar
     useEffect(() => {
-        if (!siniestroId && !isLoading) {
+        // Stop retrying if there is an error
+        if (!siniestroId && !isLoading && !error) {
             crearSiniestro();
         }
-    }, [siniestroId, isLoading, crearSiniestro]);
+    }, [siniestroId, isLoading, error, crearSiniestro]);
 
     const nextStep = () => {
         if (pasoActual < STEPS.length - 1) {
@@ -42,6 +43,29 @@ function WizardContent() {
     };
 
     const CurrentComponent = STEPS[pasoActual].component;
+
+    if (error) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+                <div className="text-center space-y-4 bg-white p-8 rounded-xl shadow-lg max-w-sm w-full">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                        <Loader2 className="w-8 h-8 text-red-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900">Error de Conexión</h3>
+                    <p className="text-sm text-gray-500">{error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition"
+                    >
+                        Reintentar
+                    </button>
+                    <p className="text-xs text-gray-400 mt-2">
+                        Verifique su conexión a internet y las variables de entorno si está en desarrollo.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     if (!siniestroId && isLoading) {
         return (
