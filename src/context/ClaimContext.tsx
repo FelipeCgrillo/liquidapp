@@ -58,8 +58,11 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
             setSiniestroId(data.id);
             return data.id;
         } catch (error) {
-            console.error('Error creando siniestro:', error);
-            toast.error('Error al iniciar el reporte');
+            console.error('❌ Error crítico creando siniestro:', error);
+            if (error instanceof Error) {
+                console.error('Detalles:', error.message, error.stack);
+            }
+            toast.error('Error al iniciar el reporte. Verifique su conexión.');
             return null;
         } finally {
             setIsLoading(false);
