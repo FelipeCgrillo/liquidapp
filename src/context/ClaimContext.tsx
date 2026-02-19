@@ -29,7 +29,7 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
     const [pasoActual, setPasoActual] = useState(0);
 
     // Inicializar siniestro si no existe
-    const crearSiniestro = async () => {
+    const crearSiniestro = React.useCallback(async () => {
         if (siniestroId) return siniestroId; // Ya existe
 
         setIsLoading(true);
@@ -64,7 +64,7 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [siniestroId]);
 
     // Suscripción Realtime a cambios en análisis
     useEffect(() => {
@@ -107,7 +107,7 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
 
     const { uploadAndAnalyze } = useEvidenceUpload();
 
-    const agregarEvidencia = async (file: File, tipo: string) => {
+    const agregarEvidencia = React.useCallback(async (file: File, tipo: string) => {
         let currentSiniestroId = siniestroId;
         if (!currentSiniestroId) {
             currentSiniestroId = await crearSiniestro();
@@ -160,14 +160,14 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
             // Revertir estado
             setEvidencias(prev => prev.filter(ev => ev.id !== tempId));
         }
-    };
+    }, [siniestroId, evidencias.length, crearSiniestro, uploadAndAnalyze]);
 
-    const eliminarEvidencia = async (id: string) => {
+    const eliminarEvidencia = React.useCallback(async (id: string) => {
         setEvidencias(prev => prev.filter(ev => ev.id !== id));
         // TODO: Eliminar de BD y Storage si no es temp
-    };
+    }, []);
 
-    const finalizarSiniestro = async () => {
+    const finalizarSiniestro = React.useCallback(async () => {
         if (!siniestroId) return false;
         setIsLoading(true);
         const supabase = createClient();
@@ -189,9 +189,9 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [siniestroId]);
 
-    const actualizarUbicacion = async (lat: number, lng: number) => {
+    const actualizarUbicacion = React.useCallback(async (lat: number, lng: number) => {
         let currentSiniestroId = siniestroId;
         if (!currentSiniestroId) {
             currentSiniestroId = await crearSiniestro();
@@ -214,7 +214,7 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
             console.error('Error actualizando ubicación:', error);
             // No bloqueamos el flujo, solo logueamos
         }
-    };
+    }, [siniestroId, crearSiniestro]);
 
     return (
         <ClaimContext.Provider value={{
