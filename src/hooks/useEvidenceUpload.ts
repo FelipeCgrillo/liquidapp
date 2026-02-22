@@ -66,6 +66,7 @@ export function useEvidenceUpload() {
             if (queueAnalysis) {
                 // Modo Síncrono-No-Bloqueante (Queue)
                 // Lanzamos la petición pero no esperamos la respuesta completa
+                console.log('Iniciando análisis LLM (queue)', { evidencia_id: evidenciaDB.id });
                 fetch('/api/queue-analisis', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -74,7 +75,16 @@ export function useEvidenceUpload() {
                         imagen_url: signedUrl,
                         siniestro_id: siniestroId,
                     }),
-                }).catch(err => console.error("Error triggering background analysis:", err));
+                })
+                    .then(async (res) => {
+                        if (!res.ok) {
+                            const errText = await res.text();
+                            console.error("🔥 Error HTTP en backend análisis:", res.status, errText);
+                        } else {
+                            console.log("✅ Petición de análisis enviada correctamente");
+                        }
+                    })
+                    .catch(err => console.error("❌ Error de red en trigger análisis:", err));
 
                 // Retornamos estado optimista "analizando"
                 return {

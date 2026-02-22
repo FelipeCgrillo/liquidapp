@@ -54,11 +54,17 @@ export async function POST(request: NextRequest) {
     // Here we replicate logic to support the "fire and forget" pattern from the client side.
 
     try {
+        console.log("Iniciando Request POST a /api/queue-analisis");
+        if (!process.env.OPENAI_API_KEY) {
+            console.error("CRÍTICO: OPENAI_API_KEY no está definida en las variables de entorno");
+        }
+
         const supabase = await createClient();
         const body = await request.json();
         const { evidencia_id, imagen_url, siniestro_id } = body;
 
         if (!evidencia_id || !imagen_url || !siniestro_id) {
+            console.warn("Faltan parámetros requeridos:", { evidencia_id, imagen_url, siniestro_id });
             return NextResponse.json(
                 { error: 'Se requieren evidencia_id, imagen_url y siniestro_id' },
                 { status: 400 }
@@ -66,6 +72,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Llamar a GPT-4o Vision
+        console.log("Llamando a OpenAI API con", { evidencia_id, modelo: 'gpt-4o' });
         const response = await openai.chat.completions.create({
             model: 'gpt-4o',
             max_tokens: 1500,
@@ -94,6 +101,7 @@ export async function POST(request: NextRequest) {
         });
 
         const contenidoRaw = response.choices[0]?.message?.content || '{}';
+        console.log("Respuesta raw de OpenAI:", contenidoRaw);
         let resultado: ResultadoAnalisisIA;
 
         try {
@@ -140,7 +148,7 @@ export async function POST(request: NextRequest) {
             });
 
         if (errorAnalisis) {
-            console.error('Error guardando análisis:', errorAnalisis);
+            console.error('Error DB guardando análisis:', JSON.stringify(errorAnalisis));
             return NextResponse.json({ error: 'Error al guardar el análisis' }, { status: 500 });
         }
 
