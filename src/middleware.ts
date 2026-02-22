@@ -41,7 +41,7 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Rutas públicas (no requieren autenticación)
-    const rutasPublicas = ['/login', '/registro', '/', '/campo/nuevo-siniestro', '/claim/wizard'];
+    const rutasPublicas = ['/login', '/registro', '/', '/campo/nuevo-siniestro', '/claim/wizard', '/api/queue-analisis'];
     const esRutaPublica =
         rutasPublicas.includes(pathname) ||
         pathname.match(/^\/campo\/siniestro\/.*\/evidencias$/) ||
@@ -80,7 +80,8 @@ export const config = {
          * - campo/siniestro/[id]/evidencias
          * - claim (client wizard)
          * - api/analizar-evidencia (public AI analysis)
+         * - api/queue-analisis (public queued AI analysis)
          */
-        '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js|workbox-.*\\.js|presentation.html|campo/nuevo-siniestro|campo/siniestro/.*/evidencias|claim|api/analizar-evidencia).*)',
+        '/((?!_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js|workbox-.*\\.js|presentation.html|campo/nuevo-siniestro|campo/siniestro/.*/evidencias|claim|api/analizar-evidencia|api/queue-analisis).*)',
     ],
 };

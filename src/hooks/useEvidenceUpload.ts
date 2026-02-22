@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import type { EvidenciaConAnalisis } from '@/types';
 import toast from 'react-hot-toast';
@@ -18,6 +18,7 @@ interface UploadOptions {
 export function useEvidenceUpload() {
     const [isUploading, setIsUploading] = useState(false);
     const { getSignedUrl } = useSignedUrl();
+    const abortControllers = useRef<{ [key: string]: AbortController }>({});
 
     const uploadAndAnalyze = async (file: File, options: UploadOptions, queueAnalysis: boolean = false): Promise<EvidenciaConAnalisis> => {
         setIsUploading(true);
@@ -65,6 +66,13 @@ export function useEvidenceUpload() {
 
             if (queueAnalysis) {
                 // Modo Síncrono-No-Bloqueante (Queue)
+                // Cancelar fetch previo si la misma evidencia intenta encolarse de nuevo
+                if (abortControllers.current[evidenciaDB.id]) {
+                    abortControllers.current[evidenciaDB.id].abort();
+                }
+                const controller = new AbortController();
+                abortControllers.current[evidenciaDB.id] = controller;
+
                 // Lanzamos la petición pero no esperamos la respuesta completa
                 console.log('Iniciando análisis LLM (queue)', { evidencia_id: evidenciaDB.id });
                 fetch('/api/queue-analisis', {
@@ -75,6 +83,7 @@ export function useEvidenceUpload() {
                         imagen_url: signedUrl,
                         siniestro_id: siniestroId,
                     }),
+                    signal: controller.signal
                 })
                     .then(async (res) => {
                         if (!res.ok) {
@@ -84,7 +93,13 @@ export function useEvidenceUpload() {
                             console.log("✅ Petición de análisis enviada correctamente");
                         }
                     })
-                    .catch(err => console.error("❌ Error de red en trigger análisis:", err));
+                    .catch(err => {
+                        if (err.name === 'AbortError') {
+                            console.log('🛑 Petición de análisis abortada a favor de una más reciente');
+                            return;
+                        }
+                        console.error("❌ Error de red en trigger análisis:", err);
+                    });
 
                 // Retornamos estado optimista "analizando"
                 return {
