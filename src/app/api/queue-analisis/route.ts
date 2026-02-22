@@ -7,6 +7,9 @@ const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Extender el tiempo máximo en Vercel (si se usa plan Pro o para evitar el default de 15s)
+export const maxDuration = 60;
+
 // Prompt de sistema (Reused from analisar-evidencia)
 const SYSTEM_PROMPT = `Eres un perito experto en liquidación de siniestros automotrices con 20 años de experiencia.
 Analizas imágenes de vehículos dañados para:
@@ -75,6 +78,7 @@ export async function POST(request: NextRequest) {
         console.log("Llamando a OpenAI API con", { evidencia_id, modelo: 'gpt-4o' });
         const response = await openai.chat.completions.create({
             model: 'gpt-4o',
+            response_format: { type: "json_object" },
             max_tokens: 1500,
             messages: [
                 {
@@ -123,8 +127,8 @@ export async function POST(request: NextRequest) {
             return 'critico';
         };
 
-        const nivelFraude = resultado.antifraude.nivel ||
-            determinarNivelFraude(resultado.antifraude.score);
+        const nivelFraude = resultado?.antifraude?.nivel ||
+            determinarNivelFraude(resultado?.antifraude?.score || 0);
 
         // Guardar análisis en la base de datos
         const { error: errorAnalisis } = await supabase
@@ -132,16 +136,16 @@ export async function POST(request: NextRequest) {
             .insert({
                 evidencia_id,
                 siniestro_id,
-                score_fraude: resultado.antifraude.score,
+                score_fraude: resultado?.antifraude?.score || 0,
                 nivel_fraude: nivelFraude,
-                indicadores_fraude: resultado.antifraude.indicadores || [],
-                justificacion_fraude: resultado.antifraude.justificacion,
-                severidad: resultado.triage.severidad,
-                partes_danadas: resultado.triage.partes_danadas || [],
-                descripcion_danos: resultado.triage.descripcion,
-                costo_estimado_min: resultado.costos.min,
-                costo_estimado_max: resultado.costos.max,
-                desglose_costos: resultado.costos.desglose,
+                indicadores_fraude: resultado?.antifraude?.indicadores || [],
+                justificacion_fraude: resultado?.antifraude?.justificacion || '',
+                severidad: resultado?.triage?.severidad || 'leve',
+                partes_danadas: resultado?.triage?.partes_danadas || [],
+                descripcion_danos: resultado?.triage?.descripcion || '',
+                costo_estimado_min: resultado?.costos?.min || 0,
+                costo_estimado_max: resultado?.costos?.max || 0,
+                desglose_costos: resultado?.costos?.desglose || [],
                 modelo_ia: 'gpt-4o',
                 respuesta_raw: { contenido: contenidoRaw, parsed: resultado },
                 tokens_usados: response.usage?.total_tokens,
@@ -167,9 +171,10 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (error) {
-        console.error('Error en queue-analisis:', error);
+        const errDetails = error instanceof Error ? error.message : JSON.stringify(error);
+        console.error('Error en queue-analisis:', errDetails);
         return NextResponse.json(
-            { error: 'Error interno del servidor' },
+            { error: 'Error interno del servidor', details: errDetails },
             { status: 500 }
         );
     }

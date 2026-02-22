@@ -88,9 +88,9 @@ export function useEvidenceUpload() {
                     .then(async (res) => {
                         if (!res.ok) {
                             const errText = await res.text();
-                            console.error("🔥 Error HTTP en backend análisis:", res.status, errText);
+                            console.error(`🔥 Error HTTP en backend análisis para ${evidenciaDB.id}:`, res.status, errText);
                         } else {
-                            console.log("✅ Petición de análisis enviada correctamente");
+                            console.log(`✅ Petición de análisis enviada correctamente para ${evidenciaDB.id}`);
                         }
                     })
                     .catch(err => {
