@@ -5,6 +5,7 @@ import type { ResultadoAnalisisIA } from '@/types';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1',
 });
 
 // Extender el tiempo máximo en Vercel (si se usa plan Pro o para evitar el default de 15s)
@@ -74,10 +75,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Llamar a GPT-4o Vision
-        console.log("Llamando a OpenAI API con", { evidencia_id, modelo: 'gpt-4o' });
+        // Llamar a Groq Vision (Llama 3.2 90B)
+        console.log("Llamando a Groq API con", { evidencia_id, modelo: 'llama-3.2-90b-vision-preview' });
         const response = await openai.chat.completions.create({
-            model: 'gpt-4o',
+            model: 'llama-3.2-90b-vision-preview',
             response_format: { type: "json_object" },
             max_tokens: 1500,
             messages: [

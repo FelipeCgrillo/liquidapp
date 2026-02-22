@@ -3,7 +3,10 @@ import OpenAI from 'openai';
 import { createClient } from '@/lib/supabase/server';
 import type { SiniestroCompleto, AnalisisIA } from '@/types';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1',
+});
 
 export async function POST(request: NextRequest) {
     try {
@@ -91,7 +94,7 @@ El informe debe ser técnico, profesional y en español. Incluye tablas donde se
 Al final incluye: "---\n*Pre-informe generado automáticamente por LiquidApp IA. Requiere revisión y firma de liquidador autorizado.*"`;
 
         const response = await openai.chat.completions.create({
-            model: 'gpt-4o',
+            model: 'llama-3.3-70b-versatile',
             max_tokens: 3000,
             messages: [
                 {

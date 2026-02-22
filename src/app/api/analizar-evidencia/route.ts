@@ -5,6 +5,7 @@ import type { ResultadoAnalisisIA } from '@/types';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1',
 });
 
 // Prompt de sistema para análisis de siniestros automotrices
@@ -67,9 +68,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Llamar a GPT-4o Vision
+        // Llamar a Groq Vision (Llama 3.2 90B)
         const response = await openai.chat.completions.create({
-            model: 'gpt-4o',
+            model: 'llama-3.2-90b-vision-preview',
             max_tokens: 1500,
             messages: [
                 {
