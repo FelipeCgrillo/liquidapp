@@ -68,9 +68,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Llamar a Groq Vision (Llama 3.2 90B)
+        // Llamar a Groq Vision (Llama 3.2 11B)
         const response = await openai.chat.completions.create({
-            model: 'llama-3.2-90b-vision-preview',
+            model: 'llama-3.2-11b-vision-preview',
             max_tokens: 1500,
             messages: [
                 {

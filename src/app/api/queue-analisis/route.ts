@@ -75,10 +75,10 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Llamar a Groq Vision (Llama 3.2 90B)
-        console.log("Llamando a Groq API con", { evidencia_id, modelo: 'llama-3.2-90b-vision-preview' });
+        // Llamar a Groq Vision (Llama 3.2 11B)
+        console.log("Llamando a Groq API con", { evidencia_id, modelo: 'llama-3.2-11b-vision-preview' });
         const response = await openai.chat.completions.create({
-            model: 'llama-3.2-90b-vision-preview',
+            model: 'llama-3.2-11b-vision-preview',
             response_format: { type: "json_object" },
             max_tokens: 1500,
             messages: [
