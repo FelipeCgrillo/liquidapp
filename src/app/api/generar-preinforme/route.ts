@@ -3,9 +3,9 @@ import OpenAI from 'openai';
 import { createClient } from '@/lib/supabase/server';
 import type { SiniestroCompleto, AnalisisIA } from '@/types';
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1',
+const groq = new OpenAI({
+    apiKey: process.env.GROQ_API_KEY,
+    baseURL: 'https://api.groq.com/openai/v1',
 });
 
 export async function POST(request: NextRequest) {
@@ -93,8 +93,8 @@ Genera el pre-informe con las siguientes secciones en Markdown:
 El informe debe ser técnico, profesional y en español. Incluye tablas donde sea apropiado.
 Al final incluye: "---\n*Pre-informe generado automáticamente por LiquidApp IA. Requiere revisión y firma de liquidador autorizado.*"`;
 
-        const response = await openai.chat.completions.create({
-            model: 'llama-3.3-70b-versatile',
+        const response = await groq.chat.completions.create({
+            model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
             max_tokens: 3000,
             messages: [
                 {

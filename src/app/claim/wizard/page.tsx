@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import StepIdentificacion from '@/components/claim/StepIdentificacion';
 import StepGeolocation from '@/components/claim/StepGeolocation';
 import StepEvidence from '@/components/claim/StepEvidence';
 import StepVoice from '@/components/claim/StepVoice';
@@ -9,27 +10,33 @@ import StepConfirmation from '@/components/claim/StepConfirmation';
 import { ClaimProvider, useClaim } from '@/context/ClaimContext';
 import { Loader2 } from 'lucide-react';
 
-const STEPS = [
+// El paso 0 es Identificación — los demás siguen el orden original
+// NOTA: StepIdentificacion tiene su propio onNext con firma diferente,
+// por eso lo manejamos aparte en WizardContent.
+const STEPS_AFTER_ID = [
     { id: 'geo', component: StepGeolocation },
     { id: 'evidence', component: StepEvidence },
     { id: 'voice', component: StepVoice },
     { id: 'confirm', component: StepConfirmation },
 ];
 
+// Total de pasos para el indicador: 1 (identificación) + 4 (flujo original) = 5
+const TOTAL_STEPS = 1 + STEPS_AFTER_ID.length;
+
 function WizardContent() {
-    const { pasoActual, setPasoActual, siniestroId, crearSiniestro, isLoading, error } = useClaim();
+    const {
+        pasoActual,
+        setPasoActual,
+        siniestroId,
+        isLoading,
+        error,
+        identificarCliente
+    } = useClaim();
+
     const [direction, setDirection] = useState(1);
 
-    // Inicializar siniestro al cargar
-    useEffect(() => {
-        // Stop retrying if there is an error
-        if (!siniestroId && !isLoading && !error) {
-            crearSiniestro();
-        }
-    }, [siniestroId, isLoading, error, crearSiniestro]);
-
     const nextStep = () => {
-        if (pasoActual < STEPS.length - 1) {
+        if (pasoActual < TOTAL_STEPS - 1) {
             setDirection(1);
             setPasoActual(prev => prev + 1);
         }
@@ -42,9 +49,18 @@ function WizardContent() {
         }
     };
 
-    const CurrentComponent = STEPS[pasoActual].component;
+    // Cuando el StepIdentificacion completa, guardamos los datos y avanzamos
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleIdentificacionNext = async (cliente: any, vehiculo: any) => {
+        await identificarCliente(cliente, vehiculo);
+        // El siniestro se crea via useEffect en ClaimContext.
+        // Avanzamos al siguiente paso directamente.
+        setDirection(1);
+        setPasoActual(1);
+    };
 
-    if (error) {
+    // Error de creación de siniestro (pasos 1+ en adelante)
+    if (error && pasoActual > 0) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
                 <div className="text-center space-y-4 bg-white p-8 rounded-xl shadow-lg max-w-sm w-full">
@@ -60,36 +76,53 @@ function WizardContent() {
                         Reintentar
                     </button>
                     <p className="text-xs text-gray-400 mt-2">
-                        Verifique su conexión a internet y las variables de entorno si está en desarrollo.
+                        Verifique su conexión a internet.
                     </p>
                 </div>
             </div>
         );
     }
 
-    if (!siniestroId && isLoading) {
+    // Loading de creación de siniestro (solo en pasos posteriores a identificación)
+    if (pasoActual > 0 && !siniestroId && isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center space-y-3">
                     <Loader2 className="w-10 h-10 text-blue-600 animate-spin mx-auto" />
-                    <p className="text-gray-500">Iniciando asistente...</p>
+                    <p className="text-gray-500">Iniciando reporte...</p>
                 </div>
             </div>
         );
     }
+
+    // Determinar qué componente mostrar
+    const isIdentificacionStep = pasoActual === 0;
+    const currentRegularStepIndex = pasoActual - 1; // índice en STEPS_AFTER_ID
+    const CurrentRegularComponent = !isIdentificacionStep
+        ? STEPS_AFTER_ID[currentRegularStepIndex]?.component
+        : null;
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
             {/* Minimal Header */}
             <header className="px-6 py-4 bg-white border-b border-gray-100 flex justify-between items-center sticky top-0 z-50">
                 <span className="text-sm font-bold text-gray-400">
-                    Siniestro #{siniestroId ? siniestroId.slice(0, 8).toUpperCase() : '...'}
+                    {pasoActual === 0
+                        ? 'LiquidApp'
+                        : `Siniestro #${siniestroId ? siniestroId.slice(0, 8).toUpperCase() : '...'}`
+                    }
                 </span>
+                {/* Indicador de progreso: 5 puntos */}
                 <div className="flex gap-1">
-                    {STEPS.map((_, index) => (
+                    {Array.from({ length: TOTAL_STEPS }).map((_, index) => (
                         <div
                             key={index}
-                            className={`h-2 rounded-full transition-all duration-300 ${index === pasoActual ? 'w-8 bg-blue-600' : 'w-2 bg-gray-200'}`}
+                            className={`h-2 rounded-full transition-all duration-300 ${index === pasoActual
+                                    ? 'w-8 bg-blue-600'
+                                    : index < pasoActual
+                                        ? 'w-2 bg-blue-300'
+                                        : 'w-2 bg-gray-200'
+                                }`}
                         />
                     ))}
                 </div>
@@ -104,10 +137,14 @@ function WizardContent() {
                         initial={{ x: direction * 50, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: direction * -50, opacity: 0 }}
-                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                        transition={{ duration: 0.3, ease: 'easeInOut' }}
                         className="flex-grow flex flex-col h-full"
                     >
-                        <CurrentComponent onNext={nextStep} onBack={prevStep} />
+                        {isIdentificacionStep ? (
+                            <StepIdentificacion onNext={handleIdentificacionNext} />
+                        ) : CurrentRegularComponent ? (
+                            <CurrentRegularComponent onNext={nextStep} onBack={prevStep} />
+                        ) : null}
                     </motion.div>
                 </AnimatePresence>
             </main>

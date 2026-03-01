@@ -30,9 +30,9 @@ export default function AdminDashboardPage() {
 
             if (!error && data) {
                 setClaims(data);
-                // Select first claim by default if available
-                if (data.length > 0 && !selectedId) {
-                    setSelectedId(data[0].id);
+                // Solo seleccionar el primer caso si no hay selección previa
+                if (data.length > 0) {
+                    setSelectedId(prev => prev ?? data[0].id);
                 }
             } else {
                 console.error('Error fetching claims:', error);

@@ -44,18 +44,17 @@ export default function EvidenciasPage() {
     const [siniestro, setSiniestro] = useState<{ numero_siniestro: string; patente: string } | null>(null);
 
     useEffect(() => {
+        const cargarSiniestro = async () => {
+            const supabase = createClient();
+            const { data } = await supabase
+                .from('siniestros')
+                .select('numero_siniestro, patente')
+                .eq('id', siniestroId)
+                .single();
+            if (data) setSiniestro(data);
+        };
         cargarSiniestro();
     }, [siniestroId]);
-
-    const cargarSiniestro = async () => {
-        const supabase = createClient();
-        const { data } = await supabase
-            .from('siniestros')
-            .select('numero_siniestro, patente')
-            .eq('id', siniestroId)
-            .single();
-        if (data) setSiniestro(data);
-    };
 
     const obtenerGeolocalizacion = (): Promise<{ lat: number; lng: number; precision: number } | null> => {
         return new Promise((resolve) => {

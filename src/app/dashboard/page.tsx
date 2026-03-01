@@ -27,27 +27,26 @@ export default function DashboardPage() {
     const [filtroEstado, setFiltroEstado] = useState<string>('todos');
 
     useEffect(() => {
+        const cargarDatos = async () => {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { router.push('/login'); return; }
+
+            const [{ data: perfilData }, { data: siniestrosData }] = await Promise.all([
+                supabase.from('perfiles').select('*').eq('id', user.id).single(),
+                supabase
+                    .from('siniestros')
+                    .select('*, liquidador_campo:perfiles!liquidador_campo_id(nombre_completo)')
+                    .order('created_at', { ascending: false })
+                    .limit(50),
+            ]);
+
+            if (perfilData) setPerfil(perfilData);
+            if (siniestrosData) setSiniestros(siniestrosData as unknown as Siniestro[]);
+            setLoading(false);
+        };
         cargarDatos();
-    }, []);
-
-    const cargarDatos = async () => {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.push('/login'); return; }
-
-        const [{ data: perfilData }, { data: siniestrosData }] = await Promise.all([
-            supabase.from('perfiles').select('*').eq('id', user.id).single(),
-            supabase
-                .from('siniestros')
-                .select('*, liquidador_campo:perfiles!liquidador_campo_id(nombre_completo)')
-                .order('created_at', { ascending: false })
-                .limit(50),
-        ]);
-
-        if (perfilData) setPerfil(perfilData);
-        if (siniestrosData) setSiniestros(siniestrosData as unknown as Siniestro[]);
-        setLoading(false);
-    };
+    }, [router]);
 
     const handleLogout = async () => {
         const supabase = createClient();

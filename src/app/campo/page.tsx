@@ -25,28 +25,27 @@ export default function CampoPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const cargarDatos = async () => {
+            const supabase = createClient();
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) { router.push('/login'); return; }
+
+            const [{ data: perfilData }, { data: siniestrosData }] = await Promise.all([
+                supabase.from('perfiles').select('*').eq('id', user.id).single(),
+                supabase
+                    .from('siniestros')
+                    .select('*')
+                    .eq('liquidador_campo_id', user.id)
+                    .order('created_at', { ascending: false })
+                    .limit(20),
+            ]);
+
+            if (perfilData) setPerfil(perfilData);
+            if (siniestrosData) setSiniestros(siniestrosData);
+            setLoading(false);
+        };
         cargarDatos();
-    }, []);
-
-    const cargarDatos = async () => {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.push('/login'); return; }
-
-        const [{ data: perfilData }, { data: siniestrosData }] = await Promise.all([
-            supabase.from('perfiles').select('*').eq('id', user.id).single(),
-            supabase
-                .from('siniestros')
-                .select('*')
-                .eq('liquidador_campo_id', user.id)
-                .order('created_at', { ascending: false })
-                .limit(20),
-        ]);
-
-        if (perfilData) setPerfil(perfilData);
-        if (siniestrosData) setSiniestros(siniestrosData);
-        setLoading(false);
-    };
+    }, [router]);
 
     const handleLogout = async () => {
         const supabase = createClient();

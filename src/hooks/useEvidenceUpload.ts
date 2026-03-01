@@ -112,24 +112,41 @@ export function useEvidenceUpload() {
 
             } else {
                 // Modo Síncrono (Legacy/Default)
-                const respuestaIA = await fetch('/api/analizar-evidencia', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        evidencia_id: evidenciaDB.id,
-                        imagen_url: signedUrl,
-                        siniestro_id: siniestroId,
-                    }),
-                });
+                let analisisResultado: Record<string, unknown> | null = null;
 
-                const resultadoIA = await respuestaIA.json();
+                try {
+                    const respuestaIA = await fetch('/api/analizar-evidencia', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            evidencia_id: evidenciaDB.id,
+                            imagen_url: signedUrl,
+                            siniestro_id: siniestroId,
+                        }),
+                    });
+
+                    if (respuestaIA.ok) {
+                        const resultadoIA = await respuestaIA.json();
+                        // Si la API retorna un objeto con analisis, usarlo; si no, null
+                        analisisResultado = resultadoIA?.analisis ?? null;
+                    } else {
+                        const errText = await respuestaIA.text();
+                        console.error(`🔥 Error HTTP en análisis síncrono (${respuestaIA.status}):`, errText);
+                        toast.error('Error al analizar la imagen. Intente de nuevo.');
+                        // analisisResultado queda null → el overlay mostrará "No se detectó vehículo"
+                    }
+                } catch (fetchError) {
+                    console.error('❌ Error de red en análisis síncrono:', fetchError);
+                    toast.error('Error de conexión al analizar la imagen.');
+                    // analisisResultado queda null
+                }
 
                 return {
                     ...evidenciaDB,
                     previewUrl: URL.createObjectURL(file), // Mantener URL local
                     analizando: false,
                     analizado: true,
-                    analisis: resultadoIA.analisis,
+                    analisis: analisisResultado,
                 };
             }
 
