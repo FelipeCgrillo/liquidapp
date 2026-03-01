@@ -50,8 +50,10 @@ function WizardContent() {
     };
 
     // Cuando el StepIdentificacion completa, guardamos los datos y avanzamos
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const handleIdentificacionNext = async (cliente: any, vehiculo: any) => {
+    const handleIdentificacionNext = async (
+        cliente: { id: string; nombre_completo: string; rut: string; telefono: string | null; email: string | null; poliza_numero: string | null; vehiculos: { id: string; patente: string; marca: string; modelo: string; anio: number | null; color: string | null }[] },
+        vehiculo: { id: string; patente: string; marca: string; modelo: string; anio: number | null; color: string | null }
+    ) => {
         await identificarCliente(cliente, vehiculo);
         // El siniestro se crea via useEffect en ClaimContext.
         // Avanzamos al siguiente paso directamente.
@@ -118,10 +120,10 @@ function WizardContent() {
                         <div
                             key={index}
                             className={`h-2 rounded-full transition-all duration-300 ${index === pasoActual
-                                    ? 'w-8 bg-blue-600'
-                                    : index < pasoActual
-                                        ? 'w-2 bg-blue-300'
-                                        : 'w-2 bg-gray-200'
+                                ? 'w-8 bg-blue-600'
+                                : index < pasoActual
+                                    ? 'w-2 bg-blue-300'
+                                    : 'w-2 bg-gray-200'
                                 }`}
                         />
                     ))}
