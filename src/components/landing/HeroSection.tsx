@@ -20,7 +20,7 @@ const itemVariants = {
 export default function HeroSection() {
     return (
         <section className="relative min-h-screen flex items-center overflow-hidden pt-20">
-            {/* Video de fondo (comprimido, carga diferida) */}
+            {/* Video de fondo (comprimido y recortado desde 1.5s) */}
             <video
                 autoPlay
                 muted
