@@ -42,7 +42,7 @@ const esAnalisisDeAuto = (analisis: { partes_danadas?: string[]; severidad?: str
 
 export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
     const webcamRef = useRef<Webcam>(null);
-    const { evidencias, agregarEvidencia, eliminarEvidencia } = useClaim();
+    const { evidencias, agregarEvidencia, eliminarEvidencia, vehiculoSeleccionado } = useClaim();
     const [currentStep, setCurrentStep] = useState(0);
     const [flash, setFlash] = useState(false);
     const [isCapturing, setIsCapturing] = useState(false);
@@ -157,6 +157,18 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
                     </span>
                 </div>
             </div>
+
+            {vehiculoSeleccionado?.patente && vehiculoSeleccionado.patente !== 'PENDIENTE' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm font-semibold text-amber-800">Fotografía TU vehículo</p>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                            Valida que la patente sea {vehiculoSeleccionado.patente}. Nuestro sistema detectará patentes que no correspondan.
+                        </p>
+                    </div>
+                </div>
+            )}
 
             <div className="relative flex-grow overflow-hidden bg-black rounded-2xl shadow-inner group min-h-[300px]">
                 {!currentEvidence ? (

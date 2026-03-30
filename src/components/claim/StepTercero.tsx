@@ -258,20 +258,28 @@ export default function StepTercero({ onNext, onBack }: StepTerceroProps) {
             </div>
 
             {/* Botones */}
-            <div className="flex gap-3 mt-6">
+            <div className="flex flex-col gap-3 mt-6">
+                <div className="flex gap-3">
+                    <button
+                        onClick={onBack}
+                        className="flex-1 py-4 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors"
+                    >
+                        Atrás
+                    </button>
+                    <button
+                        onClick={handleContinuar}
+                        disabled={!canContinue}
+                        className="flex-[2] py-4 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        Continuar
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+                </div>
                 <button
-                    onClick={onBack}
-                    className="flex-1 py-4 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold hover:bg-gray-50 transition-colors"
+                    onClick={() => onNext({ patente: 'SIN_DATOS', nombre: 'Desconocido', aseguradora: 'Ninguna', telefono: '' })}
+                    className="w-full py-3 rounded-xl border border-transparent text-gray-500 text-sm font-medium hover:bg-gray-100 transition-colors"
                 >
-                    Atrás
-                </button>
-                <button
-                    onClick={handleContinuar}
-                    disabled={!canContinue}
-                    className="flex-[2] py-4 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                    Continuar
-                    <ChevronRight className="w-5 h-5" />
+                    El otro vehículo se dio a la fuga / No estaba
                 </button>
             </div>
         </div>
