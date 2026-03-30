@@ -165,40 +165,57 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
     }, [clienteData, vehiculoSeleccionado, siniestroId, isLoading, error, crearSiniestro]);
 
     // Suscripción Realtime a cambios en análisis
+    // Degradación graceful: si WebSocket no está disponible (ej: navegadores móviles
+    // con restricciones de seguridad), la app sigue funcionando sin Realtime.
     useEffect(() => {
         if (!siniestroId) return;
 
-        const supabase = createClient();
-        const channel = supabase
-            .channel('analisis-changes')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'analisis_ia',
-                    filter: `siniestro_id=eq.${siniestroId}`
-                },
-                (payload) => {
-                    const nuevoAnalisis = payload.new;
-                    setEvidencias(prev => prev.map(ev => {
-                        if (ev.id === nuevoAnalisis.evidencia_id) {
-                            return {
-                                ...ev,
-                                analizando: false,
-                                analizado: true,
-                                analisis: nuevoAnalisis as never
-                            };
-                        }
-                        return ev;
-                    }));
-                    toast.success('Foto procesada correctamente');
-                }
-            )
-            .subscribe();
+        let channel: ReturnType<ReturnType<typeof createClient>['channel']> | null = null;
+
+        try {
+            const supabase = createClient();
+            channel = supabase
+                .channel('analisis-changes')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'analisis_ia',
+                        filter: `siniestro_id=eq.${siniestroId}`
+                    },
+                    (payload) => {
+                        const nuevoAnalisis = payload.new;
+                        setEvidencias(prev => prev.map(ev => {
+                            if (ev.id === nuevoAnalisis.evidencia_id) {
+                                return {
+                                    ...ev,
+                                    analizando: false,
+                                    analizado: true,
+                                    analisis: nuevoAnalisis as never
+                                };
+                            }
+                            return ev;
+                        }));
+                        toast.success('Foto procesada correctamente');
+                    }
+                )
+                .subscribe((status) => {
+                    if (status === 'CHANNEL_ERROR') {
+                        console.warn('Realtime no disponible, la app funciona sin actualizaciones en tiempo real.');
+                    }
+                });
+        } catch (err) {
+            // WebSocket no disponible (ej: "The operation is insecure" en móviles)
+            console.warn('Realtime deshabilitado:', err instanceof Error ? err.message : err);
+        }
 
         return () => {
-            channel.unsubscribe();
+            try {
+                channel?.unsubscribe();
+            } catch {
+                // Ignorar errores de cleanup
+            }
         };
     }, [siniestroId]);
 
