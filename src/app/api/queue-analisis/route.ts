@@ -3,6 +3,27 @@ import OpenAI from 'openai';
 import { createClient } from '@/lib/supabase/server';
 import type { ResultadoAnalisisIA } from '@/types';
 import { actualizarResumenSiniestro } from '@/lib/analisis';
+import { queueAnalisisSchema } from '@/lib/validations/api';
+
+async function callGroqWithRetry(groq: OpenAI, messages: OpenAI.Chat.ChatCompletionMessageParam[], maxRetries = 3) {
+    let lastError: unknown;
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await groq.chat.completions.create({
+                model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                response_format: { type: 'json_object' },
+                max_tokens: 1500,
+                messages,
+            });
+        } catch (error) {
+            lastError = error;
+            if (i < maxRetries - 1) {
+                await new Promise(r => setTimeout(r, 1000 * Math.pow(2, i)));
+            }
+        }
+    }
+    throw lastError;
+}
 
 const groq = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
@@ -65,24 +86,25 @@ export async function POST(request: NextRequest) {
         }
 
         const supabase = await createClient();
-        const body = await request.json();
-        const { evidencia_id, imagen_url, siniestro_id } = body;
 
-        if (!evidencia_id || !imagen_url || !siniestro_id) {
-            console.warn("Faltan parámetros requeridos:", { evidencia_id, imagen_url, siniestro_id });
+        const contentLength = request.headers.get('content-length');
+        if (contentLength && parseInt(contentLength) > 100_000) {
+            return NextResponse.json({ error: 'Payload demasiado grande' }, { status: 413 });
+        }
+
+        const body = await request.json();
+        const validation = queueAnalisisSchema.safeParse(body);
+        if (!validation.success) {
             return NextResponse.json(
-                { error: 'Se requieren evidencia_id, imagen_url y siniestro_id' },
+                { error: 'Datos inválidos', details: validation.error.flatten() },
                 { status: 400 }
             );
         }
+        const { evidencia_id, imagen_url, siniestro_id } = validation.data;
 
-        // Llamar a Groq Vision (Llama 4 Scout — reemplazo oficial de los modelos 3.2 vision)
+        // Llamar a Groq Vision con retry (Llama 4 Scout — reemplazo oficial de los modelos 3.2 vision)
         console.log("Llamando a Groq API con", { evidencia_id, modelo: 'meta-llama/llama-4-scout-17b-16e-instruct' });
-        const response = await groq.chat.completions.create({
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-            response_format: { type: "json_object" },
-            max_tokens: 1500,
-            messages: [
+        const response = await callGroqWithRetry(groq, [
                 {
                     role: 'system',
                     content: SYSTEM_PROMPT,
@@ -103,8 +125,7 @@ export async function POST(request: NextRequest) {
                         },
                     ],
                 },
-            ],
-        });
+            ]);
 
         const contenidoRaw = response.choices[0]?.message?.content || '{}';
         console.log("Respuesta raw de Groq:", contenidoRaw);

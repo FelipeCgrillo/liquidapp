@@ -8,9 +8,10 @@ import { useClaim } from '@/context/ClaimContext';
 
 interface StepGeolocationProps {
     onNext: () => void;
+    onBack?: () => void;
 }
 
-export default function StepGeolocation({ onNext }: StepGeolocationProps) {
+export default function StepGeolocation({ onNext, onBack }: StepGeolocationProps) {
     const { actualizarUbicacion } = useClaim();
     const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [isOnline, setIsOnline] = useState(true);
@@ -64,8 +65,8 @@ export default function StepGeolocation({ onNext }: StepGeolocationProps) {
     return (
         <div className="flex flex-col h-full space-y-6">
             <div className="text-center space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900">¿Dónde estás?</h2>
-                <p className="text-gray-500">Confirma la ubicación del siniestro para enviar ayuda.</p>
+                <h2 className="text-2xl font-bold text-gray-900">¿Dónde ocurrió?</h2>
+                <p className="text-gray-500">Confirma el lugar del accidente.</p>
             </div>
 
             <Card className="flex-grow overflow-hidden relative border-none shadow-lg">

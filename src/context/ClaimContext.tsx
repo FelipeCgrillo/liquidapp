@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import type { EvidenciaConAnalisis, Siniestro } from '@/types';
+import type { EvidenciaConAnalisis, TipoEvento, TipoImpacto, DatosTercero } from '@/types';
 import toast from 'react-hot-toast';
 import { useEvidenceUpload } from '@/hooks/useEvidenceUpload';
 
@@ -39,6 +39,20 @@ interface ClaimContextType {
     clienteData: ClienteAsegurado | null;
     vehiculoSeleccionado: VehiculoAsegurado | null;
     identificarCliente: (cliente: ClienteAsegurado, vehiculo: VehiculoAsegurado) => Promise<void>;
+    // Nuevos campos autoliquidador
+    tipoEvento: TipoEvento | null;
+    setTipoEvento: (tipo: TipoEvento) => void;
+    tipoImpacto: TipoImpacto | null;
+    setTipoImpacto: (tipo: TipoImpacto) => void;
+    hayHeridos: boolean;
+    setHayHeridos: (val: boolean) => void;
+    hayTerceros: boolean;
+    setHayTerceros: (val: boolean) => void;
+    datosTercero: DatosTercero | null;
+    setDatosTercero: (datos: DatosTercero) => void;
+    relatoTexto: string;
+    setRelatoTexto: (texto: string) => void;
+    // UI state
     isLoading: boolean;
     error: string | null;
     pasoActual: number;
@@ -58,17 +72,24 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
     const [clienteData, setClienteData] = useState<ClienteAsegurado | null>(null);
     const [vehiculoSeleccionado, setVehiculoSeleccionado] = useState<VehiculoAsegurado | null>(null);
 
+    // Nuevos campos autoliquidador
+    const [tipoEvento, setTipoEvento] = useState<TipoEvento | null>(null);
+    const [tipoImpacto, setTipoImpacto] = useState<TipoImpacto | null>(null);
+    const [hayHeridos, setHayHeridos] = useState(false);
+    const [hayTerceros, setHayTerceros] = useState(false);
+    const [datosTercero, setDatosTercero] = useState<DatosTercero | null>(null);
+    const [relatoTexto, setRelatoTexto] = useState('');
+
     // Crea el siniestro usando los datos reales del cliente/vehículo identificado
     const crearSiniestro = React.useCallback(async () => {
-        if (siniestroId) return siniestroId; // Ya existe
-        if (error) return null; // No reintentar si ya falló
+        if (siniestroId) return siniestroId;
+        if (error) return null;
 
         setIsLoading(true);
         setError(null);
         const supabase = createClient();
 
         try {
-            // Usar datos reales si existen, fallback a placeholder si se llama sin identificación
             const datosSiniestro = vehiculoSeleccionado && clienteData
                 ? {
                     estado: 'borrador' as const,
@@ -84,10 +105,10 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
                     telefono_asegurado: clienteData.telefono ?? undefined,
                     email_asegurado: clienteData.email ?? undefined,
                     poliza_numero: clienteData.poliza_numero ?? undefined,
-                    tipo_siniestro: 'choque'
+                    // Usar tipo_evento del contexto en lugar de hardcoded 'choque'
+                    tipo_siniestro: tipoEvento || 'choque',
                 }
                 : {
-                    // Fallback sin identificación (no debería ocurrir en flujo normal)
                     estado: 'borrador' as const,
                     fecha_siniestro: new Date().toISOString(),
                     direccion: 'Ubicación pendiente',
@@ -96,7 +117,7 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
                     modelo: 'Desconocido',
                     anio: new Date().getFullYear(),
                     nombre_asegurado: 'Usuario App',
-                    tipo_siniestro: 'choque'
+                    tipo_siniestro: tipoEvento || 'choque',
                 };
 
             const { data, error: supabaseError } = await supabase
@@ -120,12 +141,12 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
                     ? String((e as { message: unknown }).message)
                     : 'Error desconocido';
             setError(errorMessage);
-            toast.error('Error al iniciar el reporte. Verifique su conexión.');
+            toast.error('Error al iniciar tu reporte. Verifica tu conexión.');
             return null;
         } finally {
             setIsLoading(false);
         }
-    }, [siniestroId, error, clienteData, vehiculoSeleccionado]);
+    }, [siniestroId, error, clienteData, vehiculoSeleccionado, tipoEvento]);
 
     // Identificar cliente: guarda datos y crea el siniestro inmediatamente
     const identificarCliente = React.useCallback(async (
@@ -134,9 +155,6 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
     ) => {
         setClienteData(cliente);
         setVehiculoSeleccionado(vehiculo);
-        // El siniestro se crea después de que el estado se actualice,
-        // lo que hace crearSiniestro en el siguiente render cuando pasen
-        // los datos al contexto. La creación la dispara useEffect abajo.
     }, []);
 
     // Crear siniestro cuando se hayan identificado cliente Y vehículo
@@ -174,19 +192,24 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
                         }
                         return ev;
                     }));
-                    toast.success('Análisis completado');
+                    toast.success('Foto procesada correctamente');
                 }
             )
             .subscribe();
 
         return () => {
-            supabase.removeChannel(channel);
+            channel.unsubscribe();
         };
     }, [siniestroId]);
 
     const { uploadAndAnalyze } = useEvidenceUpload();
 
     const agregarEvidencia = React.useCallback(async (file: File, tipo: string) => {
+        const MAX_EVIDENCIAS = 20;
+        if (evidencias.length >= MAX_EVIDENCIAS) {
+            toast.error('Se alcanzó el límite máximo de fotos (20).');
+            return;
+        }
         let currentSiniestroId = siniestroId;
         if (!currentSiniestroId) {
             currentSiniestroId = await crearSiniestro();
@@ -222,21 +245,24 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
                 ev.id === tempId ? {
                     ...evidenciaSubida,
                     previewUrl,
-                    // No forzar analizando: true aquí — respetar el valor que retornó uploadAndAnalyze.
-                    // En modo síncrono (queueAnalysis=false), el análisis ya completó y analizando=false.
-                    // En modo queue (queueAnalysis=true), analizando=true hasta que llegue el resultado Realtime.
                 } : ev
             ));
 
         } catch (error) {
-            console.error('Error procesando evidencia:', error);
-            toast.error('Error al procesar la imagen');
+            console.error('Error procesando foto:', error);
+            toast.error('Error al procesar la foto');
             setEvidencias(prev => prev.filter(ev => ev.id !== tempId));
         }
     }, [siniestroId, evidencias.length, crearSiniestro, uploadAndAnalyze]);
 
     const eliminarEvidencia = React.useCallback(async (id: string) => {
-        setEvidencias(prev => prev.filter(ev => ev.id !== id));
+        setEvidencias(prev => {
+            const ev = prev.find(e => e.id === id);
+            if (ev?.previewUrl?.startsWith('blob:')) {
+                URL.revokeObjectURL(ev.previewUrl);
+            }
+            return prev.filter(e => e.id !== id);
+        });
     }, []);
 
     const finalizarSiniestro = React.useCallback(async () => {
@@ -244,24 +270,42 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(true);
         const supabase = createClient();
         try {
+            // Guardar datos adicionales del autoliquidador al finalizar
+            const updateData: Record<string, unknown> = {
+                estado: 'en_revision',
+                enviado_revision_at: new Date().toISOString(),
+            };
+
+            // Agregar campos nuevos si existen
+            if (tipoEvento) updateData.tipo_evento = tipoEvento;
+            if (tipoImpacto) updateData.tipo_impacto = tipoImpacto;
+            if (hayHeridos !== undefined) updateData.hay_heridos = hayHeridos;
+            if (hayTerceros !== undefined) updateData.hay_terceros = hayTerceros;
+            if (relatoTexto) updateData.relato_texto = relatoTexto;
+
+            // Datos del tercero
+            if (datosTercero) {
+                updateData.tercero_nombre = datosTercero.nombre;
+                updateData.tercero_patente = datosTercero.patente;
+                updateData.tercero_aseguradora = datosTercero.aseguradora;
+                updateData.tercero_telefono = datosTercero.telefono;
+            }
+
             const { error } = await supabase
                 .from('siniestros')
-                .update({
-                    estado: 'en_revision',
-                    enviado_revision_at: new Date().toISOString()
-                })
+                .update(updateData)
                 .eq('id', siniestroId);
 
             if (error) throw error;
             return true;
         } catch (error) {
             console.error('Error finalizando siniestro:', error);
-            toast.error('Error al enviar el reporte');
+            toast.error('Error al enviar tu reporte');
             return false;
         } finally {
             setIsLoading(false);
         }
-    }, [siniestroId]);
+    }, [siniestroId, tipoEvento, tipoImpacto, hayHeridos, hayTerceros, relatoTexto, datosTercero]);
 
     const actualizarUbicacion = React.useCallback(async (lat: number, lng: number) => {
         let currentSiniestroId = siniestroId;
@@ -299,6 +343,20 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
         clienteData,
         vehiculoSeleccionado,
         identificarCliente,
+        // Nuevos campos
+        tipoEvento,
+        setTipoEvento,
+        tipoImpacto,
+        setTipoImpacto,
+        hayHeridos,
+        setHayHeridos,
+        hayTerceros,
+        setHayTerceros,
+        datosTercero,
+        setDatosTercero,
+        relatoTexto,
+        setRelatoTexto,
+        // UI state
         isLoading,
         error,
         pasoActual,
@@ -311,6 +369,12 @@ export function ClaimProvider({ children }: { children: React.ReactNode }) {
         pasoActual,
         clienteData,
         vehiculoSeleccionado,
+        tipoEvento,
+        tipoImpacto,
+        hayHeridos,
+        hayTerceros,
+        datosTercero,
+        relatoTexto,
         agregarEvidencia,
         eliminarEvidencia,
         crearSiniestro,

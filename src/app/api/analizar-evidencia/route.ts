@@ -1,123 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@/lib/supabase/server';
-import type { ResultadoAnalisisIA } from '@/types';
+import { analizarEvidenciaSchema } from '@/lib/validations/api';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { actualizarResumenSiniestro } from '@/lib/analisis';
+import { ejecutarPipelineIndividual } from '@/lib/pipeline';
 
 const groq = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
     baseURL: 'https://api.groq.com/openai/v1',
 });
 
-// Prompt de sistema para análisis de siniestros automotrices
-const SYSTEM_PROMPT = `Eres un perito experto en liquidación de siniestros automotrices con 20 años de experiencia.
-Analizas imágenes de vehículos dañados para:
-1. ANTIFRAUDE: Detectar inconsistencias, manipulación digital, daños preexistentes o escenificados
-2. TRIAJE: Clasificar la severidad del daño (leve/moderado/grave/perdida_total)
-3. COSTOS: Estimar rangos de costo de reparación en pesos chilenos (CLP)
-
-Responde SIEMPRE en formato JSON válido con la estructura exacta especificada.
-Sé conservador en las estimaciones de fraude (solo marca alto/critico si hay evidencia clara).
-Los costos deben reflejar el mercado chileno actual (talleres certificados).`;
-
-const USER_PROMPT = `Analiza esta imagen de un vehículo siniestrado y responde con el siguiente JSON exacto:
-
-{
-  "antifraude": {
-    "score": <número 0.0-1.0, donde 0=sin fraude, 1=fraude evidente>,
-    "nivel": <"bajo"|"medio"|"alto"|"critico">,
-    "indicadores": [<lista de indicadores detectados, vacía si no hay>],
-    "justificacion": "<explicación breve de la evaluación antifraude>"
-  },
-  "triage": {
-    "severidad": <"leve"|"moderado"|"grave"|"perdida_total">,
-    "partes_danadas": [<lista de partes dañadas en español, ej: "parachoque_delantero", "capot", "faro_derecho">],
-    "descripcion": "<descripción técnica de los daños observados>"
-  },
-  "costos": {
-    "min": <costo mínimo en CLP como número entero>,
-    "max": <costo máximo en CLP como número entero>,
-    "desglose": [
-      {
-        "parte": "<nombre de la parte>",
-        "costo_min": <número entero CLP>,
-        "costo_max": <número entero CLP>
-      }
-    ]
-  }
-}
-
-IMPORTANTE: Responde SOLO con el JSON, sin texto adicional.`;
-
+/**
+ * POST /api/analizar-evidencia
+ * 
+ * Pipeline V2 — Ejecuta Etapa 0 (metadata) + Etapa 1 (visión ampliada) para una foto.
+ * Etapas 2+3 se ejecutan aparte en /api/analisis-cruzado cuando todas las fotos están listas.
+ */
 export async function POST(request: NextRequest) {
     try {
-        // Guard: verificar que la API key esté configurada
         if (!process.env.GROQ_API_KEY) {
-            console.error('CRÍTICO: GROQ_API_KEY no está definida en las variables de entorno');
+            console.error('CRÍTICO: GROQ_API_KEY no está definida');
             return NextResponse.json({ error: 'GROQ_API_KEY no configurada' }, { status: 500 });
         }
 
-        // Autenticación opcional para soportar el wizard público
         const supabase = await createClient();
-        // const { data: { user } } = await supabase.auth.getUser();
 
-        // if (!user) {
-        //     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-        // }
+        // Rate limit
+        const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim()
+            || request.headers.get('x-real-ip')
+            || '127.0.0.1';
+        const { success: rateLimitOk, resetAt } = checkRateLimit(ip, 15, 3_600_000);
+        if (!rateLimitOk) {
+            return NextResponse.json(
+                { error: 'Límite de análisis alcanzado. Intenta en una hora.' },
+                {
+                    status: 429,
+                    headers: { 'Retry-After': Math.ceil((resetAt - Date.now()) / 1000).toString() },
+                }
+            );
+        }
+
+        const contentLength = request.headers.get('content-length');
+        if (contentLength && parseInt(contentLength) > 100_000) {
+            return NextResponse.json({ error: 'Payload demasiado grande' }, { status: 413 });
+        }
 
         const body = await request.json();
-        const { evidencia_id, imagen_url, siniestro_id } = body;
-
-        if (!evidencia_id || !imagen_url || !siniestro_id) {
+        const validation = analizarEvidenciaSchema.safeParse(body);
+        if (!validation.success) {
             return NextResponse.json(
-                { error: 'Se requieren evidencia_id, imagen_url y siniestro_id' },
+                { error: 'Datos inválidos', details: validation.error.flatten() },
                 { status: 400 }
             );
         }
+        const { evidencia_id, imagen_url, siniestro_id } = validation.data;
 
-        // Llamar a Groq Vision (Llama 4 Scout — reemplazo oficial de los modelos 3.2 vision)
-        const response = await groq.chat.completions.create({
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-            response_format: { type: "json_object" },
-            max_tokens: 1500,
-            messages: [
-                {
-                    role: 'system',
-                    content: SYSTEM_PROMPT,
-                },
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: imagen_url,
-                                detail: 'high',
-                            },
-                        },
-                        {
-                            type: 'text',
-                            text: USER_PROMPT,
-                        },
-                    ],
-                },
-            ],
+        // Obtener metadata de la evidencia (GPS, etc.)
+        const { data: evidencia } = await supabase
+            .from('evidencias')
+            .select('latitud, longitud, tipo_mime')
+            .eq('id', evidencia_id)
+            .single();
+
+        // ─── Ejecutar Pipeline Individual (Etapas 0 + 1) ────────────────
+        const resultado = await ejecutarPipelineIndividual(groq, {
+            imagenUrl: imagen_url,
+            evidenciaId: evidencia_id,
+            siniestroId: siniestro_id,
+            gpsLat: evidencia?.latitud,
+            gpsLng: evidencia?.longitud,
+            tipoMime: evidencia?.tipo_mime,
         });
 
-        const contenidoRaw = response.choices[0]?.message?.content || '{}';
-        let resultado: ResultadoAnalisisIA;
+        const { vision } = resultado.etapa1;
 
-        try {
-            resultado = JSON.parse(contenidoRaw);
-        } catch {
-            console.error('Error parseando respuesta IA:', contenidoRaw);
-            return NextResponse.json(
-                { error: 'Error al procesar la respuesta de la IA' },
-                { status: 500 }
-            );
-        }
-
-        // Determinar nivel de fraude desde el score
+        // Determinar nivel de fraude
         const determinarNivelFraude = (score: number): string => {
             if (score < 0.25) return 'bajo';
             if (score < 0.5) return 'medio';
@@ -125,28 +83,37 @@ export async function POST(request: NextRequest) {
             return 'critico';
         };
 
-        const nivelFraude = resultado.antifraude.nivel ||
-            determinarNivelFraude(resultado.antifraude.score);
+        const nivelFraude = vision.antifraude.nivel ||
+            determinarNivelFraude(vision.antifraude.score);
 
-        // Guardar análisis en la base de datos
+        // ─── Guardar en BD ───────────────────────────────────────────────
         const { data: analisis, error: errorAnalisis } = await supabase
             .from('analisis_ia')
             .insert({
                 evidencia_id,
                 siniestro_id,
-                score_fraude: resultado.antifraude.score,
+                // Antifraude
+                score_fraude: vision.antifraude.score,
                 nivel_fraude: nivelFraude,
-                indicadores_fraude: resultado.antifraude.indicadores || [],
-                justificacion_fraude: resultado.antifraude.justificacion,
-                severidad: resultado.triage.severidad,
-                partes_danadas: resultado.triage.partes_danadas || [],
-                descripcion_danos: resultado.triage.descripcion,
-                costo_estimado_min: resultado.costos.min,
-                costo_estimado_max: resultado.costos.max,
-                desglose_costos: resultado.costos.desglose,
+                indicadores_fraude: vision.antifraude.indicadores || [],
+                justificacion_fraude: vision.antifraude.justificacion,
+                // Triaje
+                severidad: vision.triage.severidad,
+                partes_danadas: vision.triage.partes_danadas || [],
+                descripcion_danos: vision.triage.descripcion,
+                // Costos
+                costo_estimado_min: vision.costos.min,
+                costo_estimado_max: vision.costos.max,
+                desglose_costos: vision.costos.desglose,
+                // Detección vehicular (Sprint 3)
+                patente_detectada: vision.deteccion_vehiculo?.patente_detectada || null,
+                tipo_impacto_detectado: vision.deteccion_vehiculo?.tipo_impacto || null,
+                // Compliance
+                prompt_hash: (vision as unknown as Record<string, string>)._promptHash || null,
+                prompt_version: 'v2',
                 modelo_ia: 'meta-llama/llama-4-scout-17b-16e-instruct',
-                respuesta_raw: { contenido: contenidoRaw, parsed: resultado },
-                tokens_usados: response.usage?.total_tokens,
+                respuesta_raw: { vision, pipeline_errors: resultado.errores },
+                tokens_usados: resultado.etapa1.tokensUsados,
             })
             .select()
             .single();
@@ -159,19 +126,33 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Marcar evidencia como analizada
+        // Actualizar evidencia: hash SHA-256 + analizado
         await supabase
             .from('evidencias')
-            .update({ analizado: true })
+            .update({
+                analizado: true,
+                sha256_hash: resultado.etapa0.metadata.sha256 || null,
+            })
             .eq('id', evidencia_id);
 
-        // Actualizar resumen del siniestro con el análisis más crítico
+        // Actualizar resumen del siniestro
         await actualizarResumenSiniestro(supabase, siniestro_id);
 
         return NextResponse.json({
             success: true,
             analisis,
-            resultado,
+            resultado: {
+                antifraude: vision.antifraude,
+                triage: vision.triage,
+                costos: vision.costos,
+                deteccion_vehiculo: vision.deteccion_vehiculo,
+            },
+            pipeline: {
+                etapa0_ok: resultado.etapa0.completada,
+                etapa1_ok: resultado.etapa1.completada,
+                sha256: resultado.etapa0.metadata.sha256,
+                errores: resultado.errores,
+            },
         });
     } catch (error) {
         console.error('Error en análisis IA:', error);
@@ -181,4 +162,3 @@ export async function POST(request: NextRequest) {
         );
     }
 }
-

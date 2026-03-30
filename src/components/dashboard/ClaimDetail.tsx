@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import Image from 'next/image';
 import { Play, Pause, FileText, Calendar, MapPin, User, ShieldAlert, Car, ImageIcon } from 'lucide-react';
 import { useState } from 'react';
 import type { SiniestroCompleto } from '@/types';
@@ -70,7 +71,7 @@ export function ClaimDetail({ siniestro }: ClaimDetailProps) {
                         return (
                             <div key={ev.id} className="relative group rounded-lg overflow-hidden cursor-pointer border border-gray-200 shadow-sm aspect-video bg-gray-100">
                                 {imgSrc ? (
-                                    <img src={imgSrc} alt={ev.descripcion || 'Evidencia'} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                    <Image src={imgSrc} fill alt={ev.descripcion || 'Evidencia'} className="object-cover transition-transform group-hover:scale-105" />
                                 ) : (
                                     <div className="w-full h-full flex items-center justify-center text-gray-400">
                                         <ImageIcon className="w-8 h-8" />

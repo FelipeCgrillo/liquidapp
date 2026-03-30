@@ -113,11 +113,11 @@ export default function StepIdentificacion({ onNext }: StepIdentificacionProps) 
                 <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
                     <User className="w-8 h-8 text-blue-600" />
                 </div>
-                <h1 className="text-2xl font-bold text-gray-900">Identificación</h1>
+                <h1 className="text-2xl font-bold text-gray-900">Tu identidad</h1>
                 <p className="text-gray-500 text-sm mt-1">
-                    {subPaso === 'rut' && 'Ingrese su RUT para verificar su póliza'}
-                    {subPaso === 'vehiculo' && 'Seleccione el vehículo involucrado en el siniestro'}
-                    {subPaso === 'confirmar' && 'Confirme sus datos antes de continuar'}
+                    {subPaso === 'rut' && 'Ingresa tu RUT para verificar tu cobertura'}
+                    {subPaso === 'vehiculo' && 'Selecciona el vehículo involucrado'}
+                    {subPaso === 'confirmar' && 'Confirma tus datos antes de continuar'}
                 </p>
             </div>
 
@@ -135,7 +135,7 @@ export default function StepIdentificacion({ onNext }: StepIdentificacionProps) 
                         >
                             <div>
                                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                                    RUT del Asegurado
+                                    Tu RUT
                                 </label>
                                 <div className="relative">
                                     <input
@@ -151,7 +151,7 @@ export default function StepIdentificacion({ onNext }: StepIdentificacionProps) 
                                     />
                                 </div>
                                 <p className="text-xs text-gray-400 mt-2 text-center">
-                                    Ingrese el RUT sin puntos ni guión, se formateará automáticamente
+                                    Ingresa tu RUT sin puntos ni guión, se formateará automáticamente
                                 </p>
                             </div>
 
@@ -186,7 +186,7 @@ export default function StepIdentificacion({ onNext }: StepIdentificacionProps) 
 
                             {/* Nota de privacidad */}
                             <p className="text-xs text-gray-400 text-center leading-relaxed">
-                                🔒 Sus datos son confidenciales y se usan exclusivamente para verificar su póliza de seguro.
+                                🔒 Tus datos son confidenciales y se usan exclusivamente para verificar tu cobertura.
                             </p>
                         </motion.div>
                     )}
@@ -205,9 +205,7 @@ export default function StepIdentificacion({ onNext }: StepIdentificacionProps) 
                                 <CheckCircle2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
                                 <div>
                                     <p className="font-semibold text-gray-900 text-sm">{cliente.nombre_completo}</p>
-                                    {cliente.poliza_numero && (
-                                        <p className="text-xs text-gray-500">Póliza: {cliente.poliza_numero}</p>
-                                    )}
+                                    <p className="text-xs text-gray-500">Cobertura verificada ✓</p>
                                 </div>
                             </div>
 
@@ -264,7 +262,7 @@ export default function StepIdentificacion({ onNext }: StepIdentificacionProps) 
                             <div className="bg-green-50 border border-green-200 rounded-xl p-5 space-y-4">
                                 <div className="flex items-center gap-2 text-green-700 font-semibold text-sm mb-1">
                                     <CheckCircle2 className="w-5 h-5" />
-                                    Identidad verificada
+                                    Tu identidad verificada
                                 </div>
 
                                 {/* Datos del Asegurado */}
@@ -281,18 +279,16 @@ export default function StepIdentificacion({ onNext }: StepIdentificacionProps) 
                                             {cliente.telefono}
                                         </div>
                                     )}
-                                    {cliente.poliza_numero && (
-                                        <div className="flex items-center gap-1 text-sm text-gray-500">
-                                            <FileText className="w-3.5 h-3.5" />
-                                            Póliza: {cliente.poliza_numero}
-                                        </div>
-                                    )}
+                                    <div className="flex items-center gap-1 text-sm text-green-600">
+                                        <FileText className="w-3.5 h-3.5" />
+                                        Cobertura vigente ✓
+                                    </div>
                                 </div>
 
                                 <div className="border-t border-green-200 pt-3 space-y-2">
                                     <div className="flex items-center gap-2 text-gray-500 text-xs font-semibold uppercase tracking-wider">
                                         <Car className="w-3.5 h-3.5" />
-                                        Vehículo involucrado
+                                        Tu vehículo
                                     </div>
                                     <p className="font-bold text-gray-900">
                                         {vehiculoSeleccionado.marca} {vehiculoSeleccionado.modelo}
@@ -307,7 +303,7 @@ export default function StepIdentificacion({ onNext }: StepIdentificacionProps) 
 
                             <button
                                 onClick={confirmarYContinuar}
-                                className="w-full bg-blue-600 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition-all"
+                                className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition-all"
                             >
                                 Confirmar e Iniciar Reporte
                                 <ChevronRight className="w-5 h-5" />

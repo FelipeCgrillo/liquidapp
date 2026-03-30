@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mic, Square, Play, RefreshCw, SkipForward } from 'lucide-react';
+import { Mic, Square, Play, RefreshCw, PenLine, ChevronRight } from 'lucide-react';
 
 interface StepVoiceProps {
     onNext: () => void;
@@ -30,6 +30,8 @@ export default function StepVoice({ onNext, onBack }: StepVoiceProps) {
     const [isRecording, setIsRecording] = useState(false);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const [micError, setMicError] = useState<'denied' | 'unsupported' | null>(null);
+    const [modoTexto, setModoTexto] = useState(false);
+    const [textoRelato, setTextoRelato] = useState('');
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
 
@@ -82,13 +84,14 @@ export default function StepVoice({ onNext, onBack }: StepVoiceProps) {
         setMicError(null);
     };
 
+    const tieneRelato = audioUrl !== null || textoRelato.trim().length >= 10;
+
     return (
         <div className="flex flex-col h-full space-y-8 items-center justify-center">
             <div className="text-center space-y-2">
-                <h2 className="text-2xl font-bold text-gray-900">Cuéntanos qué pasó</h2>
+                <h2 className="text-2xl font-bold text-gray-900">Cuéntanos con tus palabras</h2>
                 <p className="text-gray-500">
-                    Graba un audio breve relatando el siniestro.{' '}
-                    <span className="text-xs text-gray-400">(opcional)</span>
+                    {modoTexto ? 'Describe brevemente qué pasó.' : 'Graba un audio breve (máximo 60 segundos).'}
                 </p>
             </div>
 
@@ -140,7 +143,26 @@ export default function StepVoice({ onNext, onBack }: StepVoiceProps) {
             </div>
 
             <div className="w-full space-y-3">
-                {!audioUrl ? (
+                {modoTexto ? (
+                    /* Modo texto */
+                    <>
+                        <textarea
+                            value={textoRelato}
+                            onChange={(e) => setTextoRelato(e.target.value.slice(0, 500))}
+                            placeholder="Describe lo que pasó: dónde venías, qué ocurrió, si frenaste, etc."
+                            className="w-full h-32 border-2 border-gray-200 rounded-xl p-4 text-gray-900 placeholder:text-gray-400 resize-none focus:outline-none focus:border-blue-500 transition-colors"
+                        />
+                        <p className="text-xs text-gray-400 text-right">{textoRelato.length}/500 caracteres</p>
+                        <Button
+                            onClick={onNext}
+                            disabled={!tieneRelato}
+                            className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700 font-bold disabled:opacity-40"
+                        >
+                            Continuar
+                            <ChevronRight className="w-5 h-5 ml-1" />
+                        </Button>
+                    </>
+                ) : !audioUrl ? (
                     <Button
                         onClick={isRecording ? stopRecording : startRecording}
                         className={`w-full h-20 text-xl font-bold rounded-full shadow-lg flex items-center justify-center gap-3 transition-colors ${isRecording ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}
@@ -153,7 +175,7 @@ export default function StepVoice({ onNext, onBack }: StepVoiceProps) {
                         ) : (
                             <>
                                 <Mic className="w-8 h-8" />
-                                {micError ? 'Intentar de nuevo' : 'Grabar Relato'}
+                                {micError ? 'Intentar de nuevo' : 'Grabar tu relato'}
                             </>
                         )}
                     </Button>
@@ -169,22 +191,24 @@ export default function StepVoice({ onNext, onBack }: StepVoiceProps) {
                     </div>
                 )}
 
-                {/* Botones secundarios */}
-                <div className="flex gap-2">
-                    <Button variant="ghost" onClick={onBack} className="flex-1 text-gray-500">
-                        Atrás
-                    </Button>
-                    {!isRecording && (
-                        <Button
-                            variant="ghost"
-                            onClick={onNext}
-                            className="flex-1 text-gray-400 text-sm"
-                        >
-                            <SkipForward className="w-4 h-4 mr-1" />
-                            Omitir
-                        </Button>
-                    )}
-                </div>
+                {/* Alternar entre audio y texto */}
+                {!isRecording && !audioUrl && (
+                    <button
+                        onClick={() => setModoTexto(!modoTexto)}
+                        className="w-full text-sm text-gray-500 py-2 flex items-center justify-center gap-1.5 hover:text-gray-700 transition-colors"
+                    >
+                        {modoTexto ? (
+                            <><Mic className="w-4 h-4" /> Prefiero grabar un audio</>
+                        ) : (
+                            <><PenLine className="w-4 h-4" /> Prefiero escribir</>
+                        )}
+                    </button>
+                )}
+
+                {/* Botón atrás */}
+                <Button variant="ghost" onClick={onBack} className="w-full text-gray-500">
+                    Atrás
+                </Button>
             </div>
         </div>
     );

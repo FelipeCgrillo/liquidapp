@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // Cliente Supabase con anon key (el RPC usa SECURITY DEFINER, no se necesita service_role)
 function getSupabaseClient() {
@@ -43,6 +44,24 @@ function normalizarRut(rut: string): string {
 }
 
 export async function GET(request: NextRequest) {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim()
+        || request.headers.get('x-real-ip')
+        || '127.0.0.1';
+
+    const { success, remaining, resetAt } = checkRateLimit(ip, 10, 60_000);
+    if (!success) {
+        return NextResponse.json(
+            { error: 'Demasiadas solicitudes. Intenta en unos minutos.' },
+            {
+                status: 429,
+                headers: {
+                    'Retry-After': Math.ceil((resetAt - Date.now()) / 1000).toString(),
+                    'X-RateLimit-Remaining': '0',
+                },
+            }
+        );
+    }
+
     const { searchParams } = new URL(request.url);
     const rutParam = searchParams.get('rut');
 

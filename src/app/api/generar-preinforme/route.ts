@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { createClient } from '@/lib/supabase/server';
 import type { SiniestroCompleto, AnalisisIA } from '@/types';
+import { generarPreinformeSchema } from '@/lib/validations/api';
 
 const groq = new OpenAI({
     apiKey: process.env.GROQ_API_KEY,
@@ -17,11 +18,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
         }
 
-        const { siniestro_id } = await request.json();
-
-        if (!siniestro_id) {
-            return NextResponse.json({ error: 'Se requiere siniestro_id' }, { status: 400 });
+        const body = await request.json();
+        const validation = generarPreinformeSchema.safeParse(body);
+        if (!validation.success) {
+            return NextResponse.json(
+                { error: 'Datos inválidos', details: validation.error.flatten() },
+                { status: 400 }
+            );
         }
+        const { siniestro_id } = validation.data;
 
         // Obtener datos completos del siniestro
         const { data } = await supabase

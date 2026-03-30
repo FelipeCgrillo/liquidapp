@@ -7,10 +7,12 @@ export async function middleware(request: NextRequest) {
     });
 
 
-    // Si no existen las variables, permitimos el paso (modo debug/setup)
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         console.error('⚠️ Supabase keys missing in Middleware!');
-        return supabaseResponse;
+        if (process.env.NODE_ENV === 'production') {
+            return NextResponse.json({ error: 'Service unavailable' }, { status: 503 });
+        }
+        return NextResponse.next();
     }
 
     const supabase = createServerClient(
@@ -41,11 +43,16 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     // Rutas públicas (no requieren autenticación)
-    const rutasPublicas = ['/login', '/registro', '/', '/campo/nuevo-siniestro', '/claim/wizard', '/api/queue-analisis', '/api/buscar-cliente'];
+    const rutasPublicas = ['/login', '/registro', '/', '/campo/nuevo-siniestro', '/claim/wizard', '/api/buscar-cliente'];
     const esRutaPublica =
         rutasPublicas.includes(pathname) ||
-        pathname.match(/^\/campo\/siniestro\/.*\/evidencias$/) ||
+        pathname.match(/^\/campo\/siniestro\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/evidencias$/i) ||
         pathname.startsWith('/claim/');
+
+    // Proteger endpoint de análisis IA en cola
+    if (pathname === '/api/queue-analisis' && !user) {
+        return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+    }
 
     // Si no está autenticado y accede a ruta protegida → redirigir a login
     if (!user && !esRutaPublica) {

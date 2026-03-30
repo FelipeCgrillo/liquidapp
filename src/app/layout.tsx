@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'react-hot-toast';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -39,7 +40,9 @@ export default function RootLayout({
                 <meta name="mobile-web-app-capable" content="yes" />
             </head>
             <body className={`${inter.className} bg-dark-950 text-dark-100 antialiased`}>
-                {children}
+                <ErrorBoundary>
+                    {children}
+                </ErrorBoundary>
                 <Toaster
                     position="top-center"
                     toastOptions={{

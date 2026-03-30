@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import Image from 'next/image';
 import Webcam from 'react-webcam';
 import { Button } from '@/components/ui/button';
 import { Camera, Check, Trash2, Car, Loader2, Sparkles, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -126,7 +127,7 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
     const handleAnalisisCompletado = useCallback((evidenciaDescripcion: string, tieneAuto: boolean) => {
         if (tieneAuto) {
             setValidadas(prev => ({ ...prev, [evidenciaDescripcion]: true }));
-            toast.success('✅ Vehículo detectado correctamente');
+            toast.success('✓ Foto recibida correctamente');
             // Avanzar al siguiente paso después de 1.5s
             setTimeout(() => {
                 const nextStep = REQUIRED_PHOTOS.findIndex(p => p.id === evidenciaDescripcion) + 1;
@@ -135,7 +136,7 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
                 }
             }, 1500);
         } else {
-            toast.error('⚠️ No se detectó un vehículo. Por favor retoma la foto enfocando el auto.', { duration: 5000 });
+            toast.error('No pudimos procesar esta foto. Intenta de nuevo enfocando el vehículo.', { duration: 5000 });
         }
     }, []);
 
@@ -146,7 +147,7 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
     return (
         <div className="flex flex-col h-full space-y-4">
             <div className="text-center space-y-1">
-                <h2 className="text-xl font-bold text-gray-900">Evidencia del Daño</h2>
+                <h2 className="text-xl font-bold text-gray-900">Fotos del daño</h2>
                 <div className="flex justify-center items-center gap-2">
                     <p className="text-sm text-gray-500">
                         Foto {currentStep + 1} de {REQUIRED_PHOTOS.length}:
@@ -241,8 +242,13 @@ export default function StepEvidence({ onNext, onBack }: StepEvidenceProps) {
                         >
                             {evidence ? (
                                 <>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={evidence.previewUrl} className="w-full h-full object-cover opacity-60" alt="" />
+                                            <Image
+                                        src={evidence.previewUrl || ''}
+                                        fill
+                                        className="object-cover opacity-60"
+                                        alt=""
+                                        unoptimized={evidence.previewUrl?.startsWith('blob:') || evidence.previewUrl?.startsWith('data:')}
+                                    />
                                     <div className="absolute inset-0 flex items-center justify-center">
                                         {evidence.analizando ? (
                                             <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
@@ -325,11 +331,15 @@ function EvidenciaOverlay({ evidence, validada, onAnalisisCompletado }: Evidenci
             "absolute inset-0 bg-gray-900 flex items-center justify-center transition-all duration-500",
             validada ? "ring-4 ring-green-500 ring-inset" : ""
         )}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
                 src={evidence.previewUrl || evidence.storage_path}
+                fill
                 alt="Captured"
-                className="w-full h-full object-contain"
+                className="object-contain"
+                unoptimized={
+                    (evidence.previewUrl || evidence.storage_path)?.startsWith('blob:') ||
+                    (evidence.previewUrl || evidence.storage_path)?.startsWith('data:')
+                }
             />
 
             {/* Overlay de Estado */}
@@ -340,29 +350,21 @@ function EvidenciaOverlay({ evidence, validada, onAnalisisCompletado }: Evidenci
                             <Sparkles className="w-12 h-12 text-blue-400" />
                             <Loader2 className="absolute -bottom-1 -right-1 w-5 h-5 text-white animate-spin" />
                         </div>
-                        <p className="text-white font-medium text-sm">Verificando vehículo...</p>
+                        <p className="text-white font-medium text-sm">Procesando tu foto...</p>
                     </div>
                 ) : validada ? (
                     <div className="text-center space-y-2 animate-in zoom-in duration-300">
                         <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-green-500/30 ring-4 ring-green-300/40">
                             <Check className="w-8 h-8 text-white" />
                         </div>
-                        <p className="text-white font-bold text-lg">Vehículo Confirmado</p>
-                        {evidence.analisis?.severidad && (
-                            <p className={`text-sm font-medium px-2 py-0.5 rounded-full inline-block mt-1 ${evidence.analisis.severidad === 'leve' ? 'bg-green-500/20 text-green-300' :
-                                evidence.analisis.severidad === 'moderado' ? 'bg-yellow-500/20 text-yellow-300' :
-                                    'bg-red-500/20 text-red-300'
-                                }`}>
-                                Daño {evidence.analisis.severidad}
-                            </p>
-                        )}
+                        <p className="text-white font-bold text-lg">✓ Foto aceptada</p>
                     </div>
                 ) : evidence.analisis === null ? (
                     // analisis es null: terminó pero no detectó auto
                     <div className="flex flex-col items-center text-yellow-400 text-center px-6">
                         <AlertTriangle className="w-10 h-10 mb-2" />
-                        <p className="text-sm font-bold">No se detectó vehículo</p>
-                        <p className="text-xs text-white/70 mt-1">Toca la miniatura para retomar la foto</p>
+                        <p className="text-sm font-bold">No pudimos procesar esta foto</p>
+                        <p className="text-xs text-white/70 mt-1">Toca la miniatura para tomarla de nuevo</p>
                     </div>
                 ) : (
                     // analisis es undefined: estado inicial antes de que llegue el resultado
