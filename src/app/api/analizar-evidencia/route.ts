@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
                 // Compliance
                 prompt_hash: (vision as unknown as Record<string, string>)._promptHash || null,
                 prompt_version: 'v2',
-                modelo_ia: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                modelo_ia: 'llama-3.2-11b-vision-preview',
                 respuesta_raw: { vision, pipeline_errors: resultado.errores },
                 tokens_usados: resultado.etapa1.tokensUsados,
             })

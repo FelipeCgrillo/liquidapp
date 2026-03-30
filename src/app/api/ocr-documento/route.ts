@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
         // Llamar a Groq Vision
         const response = await groq.chat.completions.create({
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+            model: 'llama-3.2-11b-vision-preview',
             response_format: { type: 'json_object' },
             max_tokens: 1000,
             messages: [

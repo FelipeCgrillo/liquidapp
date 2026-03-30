@@ -96,7 +96,7 @@ export async function analizarCruzado(
     for (let i = 0; i < maxRetries; i++) {
         try {
             const response = await groqClient.chat.completions.create({
-                model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+                model: 'llama-3.2-11b-vision-preview',
                 response_format: { type: 'json_object' },
                 max_tokens: 1500,
                 messages: [

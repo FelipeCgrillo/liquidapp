@@ -10,7 +10,7 @@ async function callGroqWithRetry(groq: OpenAI, messages: OpenAI.Chat.ChatComplet
     for (let i = 0; i < maxRetries; i++) {
         try {
             return await groq.chat.completions.create({
-                model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                model: 'llama-3.2-11b-vision-preview',
                 response_format: { type: 'json_object' },
                 max_tokens: 1500,
                 messages,
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
         const { evidencia_id, imagen_url, siniestro_id } = validation.data;
 
         // Llamar a Groq Vision con retry (Llama 4 Scout — reemplazo oficial de los modelos 3.2 vision)
-        console.log("Llamando a Groq API con", { evidencia_id, modelo: 'meta-llama/llama-4-scout-17b-16e-instruct' });
+        console.log("Llamando a Groq API con", { evidencia_id, modelo: 'llama-3.2-11b-vision-preview' });
         const response = await callGroqWithRetry(groq, [
                 {
                     role: 'system',
@@ -169,7 +169,7 @@ export async function POST(request: NextRequest) {
                 costo_estimado_min: resultado?.costos?.min || 0,
                 costo_estimado_max: resultado?.costos?.max || 0,
                 desglose_costos: resultado?.costos?.desglose || [],
-                modelo_ia: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                modelo_ia: 'llama-3.2-11b-vision-preview',
                 respuesta_raw: { contenido: contenidoRaw, parsed: resultado },
                 tokens_usados: response.usage?.total_tokens,
             });

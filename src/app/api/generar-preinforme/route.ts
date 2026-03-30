@@ -99,7 +99,7 @@ El informe debe ser técnico, profesional y en español. Incluye tablas donde se
 Al final incluye: "---\n*Pre-informe generado automáticamente por LiquidApp IA. Requiere revisión y firma de liquidador autorizado.*"`;
 
         const response = await groq.chat.completions.create({
-            model: 'meta-llama/llama-4-maverick-17b-128e-instruct',
+            model: 'llama-3.3-70b-versatile',
             max_tokens: 3000,
             messages: [
                 {
