@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { CheckCircle2, Clock, CarFront, FileSearch, ShieldCheck, XCircle, ShieldAlert, Loader2, Scale, AlertTriangle } from 'lucide-react';
@@ -24,7 +24,7 @@ export default function SeguimientoPage() {
     const [enviandoApelacion, setEnviandoApelacion] = useState(false);
     const [errorApelacion, setErrorApelacion] = useState('');
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         try {
             // Reusar nuestro nuevo endpoint para obtener la data inicial
             const response = await fetch(`/api/siniestros/${siniestro_id}/estado-autoliquidacion`);
@@ -41,7 +41,7 @@ export default function SeguimientoPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [siniestro_id]);
 
     useEffect(() => {
         if (!siniestro_id) return;
@@ -72,7 +72,7 @@ export default function SeguimientoPage() {
         return () => {
             channel.unsubscribe();
         };
-    }, [siniestro_id]);
+    }, [siniestro_id, fetchData]);
 
     if (loading) {
         return (
@@ -277,7 +277,7 @@ export default function SeguimientoPage() {
                                                     <span className="text-xs bg-amber-200 text-amber-900 px-2 py-1 rounded-md font-bold">Humano</span>
                                                 </div>
                                                 <p className="text-amber-700 text-sm italic mb-2">
-                                                    "{siniestro?.apelacion_motivo}"
+                                                    &quot;{siniestro?.apelacion_motivo}&quot;
                                                 </p>
                                                 <p className="text-amber-800/70 py-2 border-t border-amber-200 text-sm mt-2">
                                                     Tu apelación tramitada el {new Date(siniestro?.apelacion_fecha).toLocaleDateString()} a las {new Date(siniestro?.apelacion_fecha).toLocaleTimeString()} está en revisión por nuestros liquidadores directos. Notificaremos cuando haya un veredicto.
