@@ -74,6 +74,7 @@ export async function ejecutarPipelineIndividual(
             tipoMime: '',
             esImagenValida: false,
             errores: ['Error en extracción de metadata'],
+            alertas_fraude_exif: ['Falla al evaluar metadata. No hay exifs disponibles.'],
         };
     }
 

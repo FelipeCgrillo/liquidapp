@@ -138,12 +138,11 @@ export default function StepResolucion({ onNext, onBack }: StepResolucionProps) 
                 </div>
 
                 <div className="w-full pt-4 space-y-3">
-                    <button
-                        onClick={onNext}
-                        className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-colors"
-                    >
-                        Ver seguimiento del caso
-                    </button>
+                    <Link href={`/seguimiento/${siniestroId}`} className="block w-full">
+                        <button className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition-colors">
+                            Ver seguimiento del caso
+                        </button>
+                    </Link>
                     <Link href="/">
                         <button className="w-full text-gray-500 py-2 text-sm hover:text-gray-700 transition-colors">
                             Volver al inicio

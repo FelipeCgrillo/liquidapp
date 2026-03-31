@@ -199,29 +199,37 @@ export async function POST(request: NextRequest) {
         }
 
         // ─── 7. Actualizar estado del siniestro ──────────────────────────
-        if (!dry_run && resultado.decision === 'autoaprobado') {
-            await supabase
-                .from('siniestros')
-                .update({
-                    estado: 'autoaprobado',
-                    severidad_general: severidadGeneral,
-                    score_fraude_general: scoreFraudePromedio,
-                    costo_estimado_min: costoEstimadoMin,
-                    costo_estimado_max: costoEstimadoMax,
-                })
-                .eq('id', siniestro_id);
-        } else {
-            // Solo actualizar scores, no cambiar estado
-            await supabase
-                .from('siniestros')
-                .update({
-                    severidad_general: severidadGeneral,
-                    score_fraude_general: scoreFraudePromedio,
-                    costo_estimado_min: costoEstimadoMin,
-                    costo_estimado_max: costoEstimadoMax,
-                })
-                .eq('id', siniestro_id);
+        // Helper: 10 días hábiles
+        const getPlazoApelacion = () => {
+            let date = new Date();
+            let daysAdded = 0;
+            while (daysAdded < 10) {
+                date.setDate(date.getDate() + 1);
+                if (date.getDay() !== 0 && date.getDay() !== 6) daysAdded++;
+            }
+            return date.toISOString();
+        };
+
+        let updatePayload: any = {
+            severidad_general: severidadGeneral,
+            score_fraude_general: scoreFraudePromedio,
+            costo_estimado_min: costoEstimadoMin,
+            costo_estimado_max: costoEstimadoMax,
+        };
+
+        if (!dry_run) {
+            if (resultado.decision === 'autoaprobado') {
+                updatePayload.estado = 'autoaprobado';
+            } else {
+                updatePayload.estado = 'rechazado';
+                updatePayload.apelacion_plazo_vence = getPlazoApelacion();
+            }
         }
+
+        await supabase
+            .from('siniestros')
+            .update(updatePayload)
+            .eq('id', siniestro_id);
 
         // ─── 8. Retornar resultado ───────────────────────────────────────
         return NextResponse.json({

@@ -90,6 +90,11 @@ export interface Siniestro {
     estado: EstadoSiniestro;
     liquidador_campo_id?: string;
     liquidador_senior_id?: string;
+    estado_autoliquidacion?: string;
+    canal_ingreso?: string;
+    apelacion_motivo?: string;
+    apelacion_fecha?: string;
+    apelacion_plazo_vence?: string;
     // Resumen IA
     severidad_general?: SeveridadDano;
     score_fraude_general?: number;
@@ -317,4 +322,14 @@ export interface NuevoSiniestroForm {
     poliza_numero?: string;
     tipo_siniestro: string;
     descripcion?: string;
+}
+
+export interface VehiculoRegistro {
+    patente: string;
+    encargo_robo: boolean;
+    marca: string;
+    modelo: string;
+    anio: number;
+    created_at: string;
+    updated_at: string;
 }

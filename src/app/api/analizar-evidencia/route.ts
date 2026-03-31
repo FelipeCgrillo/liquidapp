@@ -59,7 +59,14 @@ export async function POST(request: NextRequest) {
         // Obtener metadata de la evidencia (GPS, etc.)
         const { data: evidencia } = await supabase
             .from('evidencias')
-            .select('latitud, longitud, tipo_mime')
+            .select(`
+                latitud,
+                longitud,
+                tipo_mime,
+                siniestros!inner(
+                    fecha_siniestro
+                )
+            `)
             .eq('id', evidencia_id)
             .single();
 
@@ -70,10 +77,26 @@ export async function POST(request: NextRequest) {
             siniestroId: siniestro_id,
             gpsLat: evidencia?.latitud,
             gpsLng: evidencia?.longitud,
+            fechaCaptura: (evidencia as any)?.siniestros?.fecha_siniestro,
             tipoMime: evidencia?.tipo_mime,
         });
 
         const { vision } = resultado.etapa1;
+
+        // Combinar flags de Exif al motor de fraude visual de Llama
+        if (resultado.etapa0.metadata.alertas_fraude_exif && resultado.etapa0.metadata.alertas_fraude_exif.length > 0) {
+            vision.antifraude.indicadores = [
+                ...(vision.antifraude.indicadores || []),
+                ...resultado.etapa0.metadata.alertas_fraude_exif
+            ];
+
+            const tieneAlertasCriticas = resultado.etapa0.metadata.alertas_fraude_exif.some(a => !a.includes('purgada'));
+            if (tieneAlertasCriticas) {
+                vision.antifraude.score = Math.max(vision.antifraude.score, 0.85); // Hackea score para bloquear autoaprobado
+            } else {
+                vision.antifraude.score = Math.max(vision.antifraude.score, 0.40); // Penalty por falta de EXIF (ej: WhatsApp)
+            }
+        }
 
         // Determinar nivel de fraude
         const determinarNivelFraude = (score: number): string => {
